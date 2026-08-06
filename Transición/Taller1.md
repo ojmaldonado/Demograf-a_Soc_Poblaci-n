@@ -148,7 +148,7 @@ ggplot(d1, aes(x = Year)) +
   theme_minimal(base_size = 13) +
   theme(legend.position = "top")
 ```
-
+![Image1](tasa1.png)
 > **Preguntas — Ejercicio 1**
 >
 > 1. ¿En qué década es **más ancha** la brecha? ¿Qué le pasa a la población en
@@ -184,6 +184,7 @@ demografia |>
   theme_minimal(base_size = 12) +
   theme(legend.position = "top")
 ```
+![Image2](Tasa2.png)
 
 > **Preguntas — Ejercicio 2**
 >
@@ -213,7 +214,7 @@ ggplot(demografia, aes(x = Year, y = crecimiento_natural, color = Entity)) +
   ) +
   theme_minimal(base_size = 13)
 ```
-
+![Image3](Tasa3.png)
 Construimos una **tabla resumen** con el año más reciente disponible y una
 clasificación automática (aproximada) de la etapa:
 
@@ -265,7 +266,7 @@ ggplot(demografia, aes(x = tasa_mortalidad, y = tasa_natalidad)) +
   ) +
   theme_minimal(base_size = 12)
 ```
-
+![Image4](tasa4.png)
 ---
 
 # Reflexión final: el modelo como modelo
