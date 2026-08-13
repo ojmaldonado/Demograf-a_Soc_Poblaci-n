@@ -111,7 +111,8 @@ Maldonado, O. J., & Moreira, T. (2019). Metrics in global health: Situated diffe
 
 Smith-Greenaway, E. (2025). A new test of an old hypothesis: The link between women’s perceptions of mortality conditions and their perceptions of modern healthcare amid demographic transition. Population Studies, 1–10. [https://doi.org/10.1080/00324728.2025.2506464](https://doi.org/10.1080/00324728.2025.2506464)
 
-Crecimiento poblacional  
+Crecimiento poblacional  (Taller, sesión práctica)
+
 **21 de agosto**  
 Lectura obligatoria  
 Villalpando, w. (2010). ¿Es que el siglo xxi desmentirá a Malthus? las dimensiones de la población mundial como cuestión de estado. *Invenio, 13 *(24), 43-62. 
