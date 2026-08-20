@@ -1,0 +1,268 @@
+---
+title: "Taller: Medidas de tendencia central y dispersión"
+subtitle: "Curso de Dinámica Poblacional y Demografía"
+author: 
+date: 
+output:
+  html_document:
+    toc: true
+    toc_float: true
+    number_sections: true
+---
+
+```{r setup, include=FALSE}
+# Este bloque configura cómo se muestran los resultados. No hay que modificarlo.
+knitr::opts_chunk$set(echo = TRUE, comment = "#>")
+```
+
+# Objetivos del taller
+
+Al terminar este taller usted podrá:
+
+1. Calcular en R las principales **medidas de tendencia central** (media, mediana y moda).
+2. Calcular las principales **medidas de dispersión** (rango, varianza, desviación estándar, rango intercuartílico y coeficiente de variación).
+3. **Interpretar** esos valores en un contexto demográfico real: el crecimiento poblacional.
+4. Reconocer **cuándo** conviene cada medida y qué nos dice cada una sobre la población estudiada.
+
+No se necesita saber programar. Todo el código ya está escrito: solo hay que ejecutar cada bloque (botón verde ▶ *Run Current Chunk*) y leer con atención.
+
+---
+
+# Contexto: ¿por qué medir el crecimiento poblacional?
+
+El **crecimiento poblacional** de un país suele resumirse en su *tasa de crecimiento anual* (en %): cuánto aumenta o disminuye la población en un año. Un país puede crecer al 1.5 % anual, otro puede estar estancado (0 %) y otro puede **decrecer** (tasa negativa) por emigración o baja natalidad.
+
+Cuando tenemos las tasas de **varios** países, una sola cifra no basta. Necesitamos:
+
+- Un valor que resuma el "centro" del grupo → **tendencia central**.
+- Un valor que nos diga qué tan **parecidos o dispersos** son esos países entre sí → **dispersión**.
+
+Vamos a trabajar con datos aproximados de crecimiento poblacional de doce países de América Latina.
+
+> **Nota:** los valores son ilustrativos y aproximados, pensados para el ejercicio. En un análisis real usaríamos fuentes como *Our World in Data*, el Banco Mundial o la CEPAL.
+
+---
+
+# Paso 1: Cargar los datos
+
+En R, un conjunto de valores se guarda en un **vector**, que se crea con la función `c()` (de *combine*). Creamos dos vectores del mismo largo: uno con los nombres de los países y otro con sus tasas.
+
+```{r datos}
+# Nombres de los países
+paises <- c("Colombia", "México", "Argentina", "Chile", "Perú", "Brasil",
+            "Ecuador", "Bolivia", "Paraguay", "Uruguay", "Venezuela", "Guatemala")
+
+# Tasa de crecimiento poblacional anual, en % (valores aproximados e ilustrativos)
+tasa <- c(1.1, 0.8, 0.5, 0.6, 1.3, 0.5,
+          1.4, 1.4, 1.2, 0.3, -1.5, 1.6)
+
+# Miramos los datos juntos en una tabla
+data.frame(pais = paises, tasa_crecimiento = tasa)
+```
+
+Observe que **Venezuela** tiene una tasa **negativa** (`-1.5`): su población disminuye, en buena parte por la emigración. Guárdelo en mente, porque este "caso raro" (lo que en estadística se llama *valor atípico* o *outlier*) va a influir en algunas medidas.
+
+---
+
+# Paso 2: Medidas de tendencia central
+
+## La media (promedio)
+
+La **media** suma todos los valores y los divide entre el número de casos. Es el "punto de equilibrio" de los datos.
+
+```{r media}
+mean(tasa)
+```
+
+**Interpretación:** en promedio, estos doce países crecen alrededor de ese valor por año. Pero cuidado: la media es sensible a los valores extremos. La tasa negativa de Venezuela **jala el promedio hacia abajo**.
+
+## La mediana
+
+La **mediana** es el valor que queda justo en el medio cuando ordenamos los datos de menor a mayor. Deja la mitad de los países por debajo y la mitad por encima.
+
+```{r mediana}
+median(tasa)
+```
+
+**Compare la media y la mediana.** Si son parecidas, los datos son bastante simétricos. Si la media es **menor** que la mediana, es señal de que hay valores bajos (como Venezuela) que la están arrastrando. La mediana es **más robusta**: no se deja afectar tanto por casos raros.
+
+## La moda
+
+La **moda** es el valor que más se repite. R base no tiene una función `moda()`, pero podemos encontrarla mirando la tabla de frecuencias.
+
+En tasas de crecimiento (números con decimales) casi ningún valor se repite, así que la moda no es muy útil aquí. La moda brilla con **datos discretos**. Usemos otro ejemplo demográfico: el **número de hijos** reportado por 15 mujeres en una pequeña encuesta.
+
+```{r moda}
+# Número de hijos por mujer en una encuesta hipotética
+hijos <- c(2, 1, 3, 2, 0, 2, 4, 2, 1, 3, 2, 2, 0, 1, 2)
+
+# Tabla de frecuencias: cuántas veces aparece cada valor
+table(hijos)
+
+# La moda es el valor con mayor frecuencia
+frecuencias <- table(hijos)
+names(frecuencias)[which.max(frecuencias)]
+```
+
+**Interpretación:** el valor más frecuente indica el tamaño de familia "típico" en la muestra. Para variables como número de hijos, estado civil o nivel educativo, la moda suele ser la medida de tendencia central más informativa.
+
+> **Idea clave:** no existe una "mejor" medida de tendencia central. La media aprovecha toda la información pero se deja afectar por atípicos; la mediana resiste los atípicos; la moda es ideal para datos discretos o categóricos.
+
+---
+
+# Paso 3: Medidas de dispersión
+
+Las medidas de tendencia central nos dan el "centro", pero no nos dicen si los países se parecen entre sí o no. Para eso están las **medidas de dispersión**.
+
+## Rango (mínimo, máximo y su diferencia)
+
+```{r rango}
+min(tasa)          # valor más bajo
+max(tasa)          # valor más alto
+max(tasa) - min(tasa)   # el rango: distancia entre el mayor y el menor
+```
+
+**Interpretación:** el rango nos dice qué tan separados están los casos extremos. Es fácil de entender, pero depende **solo** de dos valores, así que un único atípico (Venezuela) lo puede inflar mucho.
+
+## Varianza y desviación estándar
+
+La **varianza** mide, en promedio, qué tan lejos está cada país de la media (elevando al cuadrado esas distancias). La **desviación estándar** es la raíz cuadrada de la varianza, y tiene la ventaja de estar en las **mismas unidades** que los datos (en %).
+
+```{r sd}
+var(tasa)   # varianza
+sd(tasa)    # desviación estándar (en puntos porcentuales)
+```
+
+**Interpretación:** la desviación estándar responde a "en promedio, ¿cuánto se aleja cada país del crecimiento promedio?". Una desviación **pequeña** significa que los países crecen a ritmos parecidos; una **grande**, que hay mucha heterogeneidad demográfica en la región.
+
+## Cuartiles y rango intercuartílico (IQR)
+
+Los **cuartiles** dividen los datos ordenados en cuatro partes iguales. El **rango intercuartílico (IQR)** es la distancia entre el tercer cuartil (75 %) y el primero (25 %): abarca el 50 % central de los países e **ignora los extremos**, por lo que resiste bien a los atípicos.
+
+```{r iqr}
+quantile(tasa)   # mínimo, Q1, mediana, Q3, máximo
+IQR(tasa)        # rango intercuartílico (Q3 - Q1)
+```
+
+## Coeficiente de variación (CV)
+
+¿Qué pasa si queremos comparar la dispersión de dos variables medidas en **escalas distintas**, como la tasa de crecimiento (en %) y el tamaño de la población (en millones)? La desviación estándar no sirve para compararlas directamente, porque están en unidades diferentes.
+
+El **coeficiente de variación** resuelve esto: expresa la desviación estándar **como porcentaje de la media**, así que no tiene unidades y permite comparar.
+
+```{r cv}
+# Población total aproximada, en millones (mismo orden que 'paises')
+poblacion <- c(52, 129, 46, 20, 34, 216, 18, 12, 7, 3.5, 28, 18)
+
+# Coeficiente de variación = (desviación estándar / media) * 100
+cv_tasa      <- (sd(tasa) / mean(tasa)) * 100
+cv_poblacion <- (sd(poblacion) / mean(poblacion)) * 100
+
+cv_tasa
+cv_poblacion
+```
+
+**Interpretación:** aunque la población tiene una desviación estándar enorme *en millones* y la tasa una muy pequeña *en %*, el CV las pone en el mismo lenguaje. El CV más alto indica la variable **relativamente más dispersa**. Compárelos: ¿en qué son más heterogéneos estos países, en su ritmo de crecimiento o en su tamaño?
+
+---
+
+# Paso 4: Un resumen de todo con una sola función
+
+La función `summary()` entrega de un golpe el mínimo, los cuartiles, la mediana y la media.
+
+```{r resumen}
+summary(tasa)
+```
+
+Y podemos armar una pequeña tabla propia con las medidas principales:
+
+```{r tabla_resumen}
+resumen <- data.frame(
+  Medida = c("Media", "Mediana", "Desv. estándar", "IQR", "Coef. variación (%)"),
+  Valor  = round(c(mean(tasa), median(tasa), sd(tasa), IQR(tasa),
+                   (sd(tasa)/mean(tasa))*100), 2)
+)
+resumen
+```
+
+---
+
+# Paso 5: Visualizar la dispersión
+
+Un **histograma** muestra cómo se reparten las tasas, y un **diagrama de caja (boxplot)** resume visualmente la mediana, los cuartiles y los posibles atípicos.
+
+```{r graficos, fig.width=6, fig.height=4}
+hist(tasa,
+     main = "Distribución de las tasas de crecimiento",
+     xlab = "Tasa de crecimiento anual (%)",
+     ylab = "Número de países",
+     col = "steelblue")
+
+boxplot(tasa,
+        main = "Diagrama de caja de las tasas de crecimiento",
+        ylab = "Tasa de crecimiento anual (%)",
+        col = "lightgreen")
+```
+
+**Interpretación:** en el boxplot, la línea gruesa es la **mediana**; la caja abarca el **50 % central** (el IQR); y cualquier punto muy separado se marca como posible **atípico**. ¿Aparece Venezuela como un punto por fuera?
+
+---
+
+# Ejercicios para resolver
+
+Trabaje directamente en este documento, escribiendo el código en los bloques vacíos.
+
+**Ejercicio 1.** Estas son tasas de crecimiento anual aproximadas (%) de varios departamentos de Colombia. Cárguelas en un vector llamado `tasa_dpto` y calcule su **media** y **mediana**. ¿Cuál es mayor? ¿Qué le sugiere eso sobre la forma de los datos?
+
+```{r ej1}
+# Amazonas, Antioquia, Atlántico, Bogotá, Chocó, Guaviare, Nariño, Valle
+tasa_dpto <- c(1.8, 0.9, 1.1, 0.4, 1.5, 2.0, 0.7, 0.6)
+
+# Escriba aquí su código:
+
+```
+
+**Ejercicio 2.** Calcule para `tasa_dpto` la **desviación estándar** y el **rango intercuartílico**. En una frase, explique qué le dice cada uno sobre la heterogeneidad entre departamentos.
+
+```{r ej2}
+# Escriba aquí su código:
+
+```
+
+**Ejercicio 3.** Calcule el **coeficiente de variación** de `tasa_dpto` y compárelo con el de los países (`cv_tasa`). ¿Los departamentos de Colombia son más homogéneos o más heterogéneos entre sí que los países de la región?
+
+```{r ej3}
+# Escriba aquí su código:
+
+```
+
+**Ejercicio 4 (interpretación, sin código).** Suponga que un/a colega dice: *"En promedio los países crecen, así que la población de la región está aumentando en todas partes"*. Con base en lo que calculó (media, mediana, dispersión y el caso de Venezuela), escriba dos o tres líneas explicando por qué esa afirmación es incompleta.
+
+*Su respuesta:*
+
+
+
+---
+
+# Reto opcional
+
+Cree su propia función `moda()` que reciba un vector y devuelva el valor (o los valores) más frecuente(s), y pruébela con el vector `hijos`. Pista: combine `table()`, `max()` y `which()`.
+
+```{r reto}
+# Escriba aquí su código:
+
+```
+
+---
+
+# Síntesis
+
+| Pregunta | Medida adecuada |
+|---|---|
+| ¿Cuál es el valor "central" o típico? | Media, mediana, moda |
+| ¿Qué tan lejos llegan los extremos? | Rango (mín, máx) |
+| ¿Cuánto se alejan los datos del promedio? | Varianza y desviación estándar |
+| ¿Cómo es el 50 % central, sin atípicos? | Cuartiles e IQR |
+| ¿Cómo comparo la dispersión de variables en escalas distintas? | Coeficiente de variación |
+
+La lección demográfica de fondo: **un solo número nunca describe a una población**. El crecimiento poblacional se entiende mejor mirando a la vez su centro y su dispersión, y prestando atención a los casos que se salen del patrón.
