@@ -2,9 +2,13 @@
 
 **Tema:** Transición demográfica en América Latina — datos, medición y debates sobre el futuro de la población.
 
+
 **Modalidad:** Trabajo aplicado (individual o en grupos de hasta 3 personas).
 
+
 **Fecha de entrega:** Viernes 28 de agosto hasta las 23:59 en e-aulas. Entregas extemporáneas tienen penalidad de -1.
+
+
 
 ---
 
