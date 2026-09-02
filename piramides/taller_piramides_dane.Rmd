@@ -1,0 +1,196 @@
+---
+title: "Taller: Pirámides poblacionales de Colombia con datos del DANE"
+subtitle: "Dinámica Poblacional y Demografía · RStudio + ggplot2"
+author: "Departamento de Sociología · Universidad del Rosario"
+date: "`r format(Sys.Date(), '%d de %B de %Y')`"
+output:
+  html_document:
+    toc: true
+    toc_float: true
+    number_sections: false
+    theme: readable
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE, message = FALSE, warning = FALSE,
+                      fig.width = 8, fig.height = 7, dpi = 120)
+```
+
+# Objetivos de aprendizaje
+
+Al terminar este taller cada estudiante será capaz de:
+
+1. Explicar qué es una **pirámide poblacional** y qué revela sobre la dinámica demográfica de una población.
+2. Obtener datos oficiales de población por **edad y sexo** desde las **proyecciones del DANE**.
+3. Transformar una tabla de población a un formato apto para graficar en R (`tidyverse`).
+4. Construir una pirámide poblacional con `ggplot2`, en valores absolutos y en porcentajes.
+5. **Interpretar** la estructura por edad y sexo de Colombia y vincularla con la transición demográfica.
+
+# Requisitos previos
+
+- Tener instalados **R** (≥ 4.1) y **RStudio**.
+- Nociones básicas de `tidyverse` (`dplyr`, `tidyr`, `ggplot2`).
+- Instalar los paquetes necesarios (solo la primera vez):
+
+```{r instalar, eval=FALSE}
+install.packages(c("tidyverse", "scales", "readxl"))
+```
+
+```{r cargar-paquetes}
+library(tidyverse)  # dplyr, tidyr, ggplot2, ...
+library(scales)     # formato de ejes (miles, %)
+```
+
+# Marco conceptual: ¿qué es una pirámide poblacional?
+
+Una **pirámide poblacional** es un histograma doble que representa la distribución de una población según **edad** (eje vertical, de menor a mayor) y **sexo** (por convención, hombres a la izquierda y mujeres a la derecha). Su forma resume la historia demográfica reciente de un país —fecundidad, mortalidad y migración— y permite anticipar presiones futuras sobre educación, empleo, salud y pensiones.
+
+Formas típicas:
+
+| Forma | Base | Interpretación |
+|---|---|---|
+| **Expansiva** (triangular) | Ancha | Alta fecundidad y mortalidad; población joven y en rápido crecimiento. |
+| **Estacionaria** (campana) | Media | Fecundidad y mortalidad moderadas; crecimiento lento. |
+| **Constrictiva** (bulbo) | Estrecha | Fecundidad en descenso; población que empieza a envejecer. |
+| **Regresiva** (invertida) | Muy estrecha | Fecundidad muy baja; envejecimiento marcado y posible decrecimiento. |
+
+La pregunta que guía el taller: **¿qué forma tiene hoy Colombia y hacia dónde se mueve?**
+
+# Los datos: proyecciones de población del DANE
+
+El **DANE** publica las *Proyecciones de población* con base en el **Censo Nacional de Población y Vivienda (CNPV) 2018**, desagregadas por área, sexo y edad, a nivel nacional, departamental y municipal:
+
+- Portal: <https://www.dane.gov.co/index.php/estadisticas-por-tema/demografia-y-poblacion/proyecciones-de-poblacion>
+- Anexo nacional por edad simple y sexo, 2020–2070 (`.xlsx`):
+  `https://www.dane.gov.co/files/censo2018/proyecciones-de-poblacion/Nacional/DCD-area-proypoblacion-Nac-2020-2070.xlsx`
+
+Para que el taller sea **100 % reproducible** en clase, trabajaremos primero con una tabla ya depurada —los **grupos quinquenales de edad y sexo de Colombia para 2024**, tomados de esa proyección— incrustada directamente en el script. En la sección 8 aprenderemos a leer el archivo original del DANE.
+
+# Paso 1 · Cargar los datos
+
+Introducimos la tabla del DANE (proyección 2024) con `tibble::tribble()`, que permite escribir los datos "como se ven":
+
+```{r datos}
+pob <- tribble(
+  ~grupo_edad,  ~Hombres,  ~Mujeres,
+  "0 a 4",       1912912,   1819442,
+  "5 a 9",       2030162,   1931204,
+  "10 a 14",     2132557,   2034853,
+  "15 a 19",     2240958,   2141431,
+  "20 a 24",     2259729,   2204813,
+  "25 a 29",     2213616,   2228115,
+  "30 a 34",     2067083,   2095689,
+  "35 a 39",     1811422,   1881453,
+  "40 a 44",     1669668,   1786757,
+  "45 a 49",     1456889,   1588348,
+  "50 a 54",     1319570,   1460445,
+  "55 a 59",     1249394,   1410494,
+  "60 a 64",     1083463,   1262482,
+  "65 a 69",      838077,   1019194,
+  "70 a 74",      619962,    772048,
+  "75 a 79",      416071,    537323,
+  "80 a 84",      252740,    344160,
+  "85 a 89",      133572,    200650,
+  "90 a 94",       53182,     87623,
+  "95 a 99",       14734,     26245,
+  "100 o más",      1837,      3386
+)
+
+pob
+```
+
+```{r comprobacion}
+# Comprobación: ¿coincide el total con la cifra oficial de 2024 (52.613.753)?
+sum(pob$Hombres) + sum(pob$Mujeres)
+```
+
+# Paso 2 · Transformar los datos para la pirámide
+
+El truco de una pirámide es sencillo: se pasa la tabla a **formato largo** (una fila por grupo de edad y sexo) y se convierten los valores de los **hombres en negativos** para que sus barras crezcan hacia la izquierda.
+
+```{r transformar}
+# Orden correcto de los grupos de edad (de menor a mayor)
+niveles_edad <- c("0 a 4","5 a 9","10 a 14","15 a 19","20 a 24","25 a 29",
+                  "30 a 34","35 a 39","40 a 44","45 a 49","50 a 54","55 a 59",
+                  "60 a 64","65 a 69","70 a 74","75 a 79","80 a 84","85 a 89",
+                  "90 a 94","95 a 99","100 o más")
+
+total_pob <- sum(pob$Hombres) + sum(pob$Mujeres)
+
+pob_larga <- pob %>%
+  pivot_longer(cols = c(Hombres, Mujeres),
+               names_to = "sexo", values_to = "poblacion") %>%
+  mutate(
+    grupo_edad = factor(grupo_edad, levels = niveles_edad),  # ordena el eje Y
+    valor      = if_else(sexo == "Hombres", -poblacion, poblacion),  # hombres a la izquierda
+    pct        = poblacion / total_pob * 100,                # % sobre el total
+    valor_pct  = if_else(sexo == "Hombres", -pct, pct)
+  )
+
+head(pob_larga)
+```
+
+# Paso 3 · Construir la pirámide (valores absolutos)
+
+Cada capa de `ggplot2` cumple una función; leerlas de arriba a abajo ayuda a entender el gráfico:
+
+```{r piramide-absoluta}
+tope <- max(pob_larga$poblacion) * 1.05  # límite simétrico del eje X
+
+ggplot(pob_larga, aes(x = valor, y = grupo_edad, fill = sexo)) +
+  geom_col(width = 0.9) +                              # barras horizontales
+  geom_vline(xintercept = 0, color = "grey40") +       # eje central
+  scale_x_continuous(
+    limits = c(-tope, tope),
+    breaks = seq(-2e6, 2e6, by = 1e6),
+    labels = function(x) comma(abs(x), big.mark = ".")  # etiquetas siempre positivas
+  ) +
+  scale_fill_manual(values = c("Hombres" = "#4E79A7", "Mujeres" = "#E15759")) +
+  labs(
+    title    = "Pirámide poblacional de Colombia, 2024",
+    subtitle = "Población por grupos quinquenales de edad y sexo",
+    x = "Población", y = "Grupo de edad", fill = "Sexo",
+    caption  = "Fuente: DANE. Proyecciones de población con base en el CNPV 2018."
+  ) +
+  theme_minimal(base_size = 12) +
+  theme(panel.grid.minor = element_blank(),
+        plot.title = element_text(face = "bold"))
+```
+
+# Paso 4 · Pirámide en porcentajes
+
+Para **comparar** poblaciones de distinto tamaño (p. ej. dos años, dos departamentos o dos países) conviene usar porcentajes en vez de conteos absolutos. Solo cambiamos `valor` por `valor_pct`:
+
+```{r piramide-porcentaje}
+tope_pct <- max(pob_larga$pct) * 1.05
+
+ggplot(pob_larga, aes(x = valor_pct, y = grupo_edad, fill = sexo)) +
+  geom_col(width = 0.9) +
+  geom_vline(xintercept = 0, color = "grey40") +
+  scale_x_continuous(
+    limits = c(-tope_pct, tope_pct),
+    labels = function(x) paste0(comma(abs(x), accuracy = 0.1, decimal.mark = ","), "%")
+  ) +
+  scale_fill_manual(values = c("Hombres" = "#4E79A7", "Mujeres" = "#E15759")) +
+  labs(
+    title    = "Estructura relativa de la población de Colombia, 2024",
+    subtitle = "Porcentaje del total nacional por edad y sexo",
+    x = "% de la población total", y = "Grupo de edad", fill = "Sexo",
+    caption  = "Fuente: DANE. Proyecciones de población con base en el CNPV 2018."
+  ) +
+  theme_minimal(base_size = 12) +
+  theme(panel.grid.minor = element_blank(),
+        plot.title = element_text(face = "bold"))
+```
+
+# Preguntas para la discusión
+
+- ¿Qué políticas públicas anticipa la forma actual de la pirámide colombiana (educación, empleo, sistema pensional)?
+- ¿Cómo se relaciona lo que ves con las tres fuerzas de la ecuación demográfica —fecundidad, mortalidad y migración?
+- ¿Qué supuestos y qué incertidumbres hay detrás de una *proyección* de población frente a un *censo*?
+
+# Referencias
+
+- DANE. *Proyecciones de población* (base CNPV 2018, actualización 2025). <https://www.dane.gov.co/index.php/estadisticas-por-tema/demografia-y-poblacion/proyecciones-de-poblacion>
+- DANE. *Nota técnica — Proyecciones de Población y Estudios Demográficos (PPED)*, julio de 2025.
+- Wickham, H. et al. (2019). *Welcome to the tidyverse*. Journal of Open Source Software.
