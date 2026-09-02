@@ -1,6 +1,15 @@
 # Datos reales del documento (Magdalena, proyecciones DANE 2020)
 # Instrucciones para construir pirámides poblacionales
 
+# La pirámide poblacional es un histograma de frecuencias doble en forma horizontal en el cual se representan las frecuencias en el eje de las abscisas y las edades 
+# (generalmente en forma quinquenal) en el eje de las ordenadas. Las edades menores se encuentran más cerca de la base y las edades mayores hacia la cúspide. 
+# Usualmente las mujeres se colocan en el lado izquierdo y los hombres en el lado derecho.
+
+La pirámide poblacional permite observar fenómenos demográficos tales como natalidad, mortalidad, distribución por género, distribución por edades o migraciones.
+
+install.packages("pyramid")
+library(pyramid)
+
 Edad <- c("0","1-4","5-9","10-14","15-19","20-24","25-29","30-34",
           "35-39","40-44","45-49","50-54","55-59","60-64","65-69",
           "70-74","75-79","80+")
