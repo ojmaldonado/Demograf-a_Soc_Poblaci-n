@@ -2,7 +2,7 @@
 ### Una introducción práctica a la perspectiva del curso de vida
 **Curso:** Dinámica Poblacional y Demografía
 **Duración sugerida:** 2 horas 
-**Modalidad:** individual → grupos pequeños (2–3)
+**Modalidad:** individual 
 
 ---
 
@@ -125,6 +125,7 @@ Para la discusión en grupo y la plenaria:
 ## 9. Extensión digital opcional (RStudio)
 
 Para el grupo que quiera versión digital, las trayectorias se dibujan muy bien como *swimlanes* con `ggplot2`: cada persona es un `geom_segment` horizontal (de nacimiento a hoy) y los eventos son `geom_point`, coloreados por tipo. Poniendo el año en el eje x se ven las intersecciones; cambiando a edad en el eje x se compara el *timing* entre cohortes. 
+
 ---
 
 ## 10. Entregable y evaluación
@@ -132,7 +133,7 @@ Para el grupo que quiera versión digital, las trayectorias se dibujan muy bien 
 **Entregable individual (breve, 1–2 páginas o el pliego fotografiado + comentario):**
 1. El dibujo de las trayectorias (los dos ejes).
 2. Un párrafo por cada uno de estos conceptos, ilustrado con **una intersección concreta** de su familia: vidas vinculadas, *timing*, cohorte/periodo/edad, y desviación del ciclo vital clásico.
-
+3. Cargar como post en [Padlet] (https://padlet.com/ojmaldonadoc/dinamica-poblacional-2026-xz6s31eb16paspyb)
 
 ---
 
