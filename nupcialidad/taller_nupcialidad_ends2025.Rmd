@@ -1,0 +1,446 @@
+---
+title: "Taller de R --- Nupcialidad y exposición al riesgo de embarazo en Colombia"
+subtitle: "Análisis reproducible con datos agregados de la ENDS 2025 (Capítulo 5)"
+author: "Dinámica Poblacional y Demografía"
+date: "`r format(Sys.Date(), '%d de %B de %Y')`"
+output:
+  html_document:
+    toc: true
+    toc_float: true
+    toc_depth: 3
+    number_sections: true
+    code_folding: show
+    theme: flatly
+    df_print: paged
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(
+  echo = TRUE, message = FALSE, warning = FALSE,
+  fig.align = "center", fig.width = 8, fig.height = 5, dpi = 110
+)
+```
+
+# Presentación del taller
+
+Este taller reconstruye, paso a paso y con código fácilmente ejecutable, los
+principales indicadores de **nupcialidad y exposición al riesgo de embarazo** que
+publica el Capítulo 5 de la **Encuesta Nacional de Demografía y Salud (ENDS) 2025**
+del Ministerio de Salud y Protección Social de Colombia.
+
+**Fuente de los datos:** Minsalud (2025). *Nupcialidad y exposición al riesgo de
+embarazo* (Cap. 5, ENDS 2025).
+<https://www.minsalud.gov.co/sites/rid/Lists/BibliotecaDigital/RIDE/VS/ED/GCFI/publicacion-nupcialidad-ends-2025.pdf>
+
+## Nota metodológica importante (léala antes de correr el código)
+
+La ENDS 2025 se procesa a partir de **microdatos** con **factores de expansión**
+(el propio Ministerio informa que sus tablas se calcularon en R con esos factores).
+La publicación en PDF, sin embargo, entrega los resultados **ya agregados y
+expandidos**. Por eso en este taller **no reestimamos** desde microdatos: cargamos
+las cifras oficiales como `tibbles` y practicamos el flujo de **manipulación,
+agregación y visualización** con `tidyverse` y `ggplot2`.
+
+> **Distinción pedagógica.** Con microdatos reales de la ENDS el flujo correcto sería
+> declarar el diseño muestral (`survey` / `srvyr`), por ejemplo
+> `as_survey_design(weights = factor_expansion, strata = ..., ids = ...)`, y recién
+> ahí calcular proporciones y medianas. Aquí trabajamos sobre agregados publicados,
+> que es un escenario frecuente y perfectamente válido para análisis secundario.
+
+## Paquetes
+
+```{r paquetes}
+# install.packages(c("tidyverse", "scales"))  # ejecutar una sola vez si hace falta
+library(tidyverse)
+library(scales)
+
+# Tema común para todas las figuras del taller
+theme_taller <- theme_minimal(base_size = 12) +
+  theme(
+    plot.title    = element_text(face = "bold"),
+    plot.subtitle = element_text(color = "grey30"),
+    panel.grid.minor = element_blank(),
+    legend.position  = "top",
+    legend.title     = element_blank()
+  )
+theme_set(theme_taller)
+
+# Paleta reutilizable
+pal <- c("#1b6ca8", "#f28e2b", "#59a14f", "#e15759", "#b07aa1")
+```
+
+---
+
+# El inicio de la exposición: primera relación sexual
+
+La edad de la primera relación sexual marca el **inicio de la exposición al riesgo
+de embarazo**. Dos hechos son centrales en la ENDS 2025.
+
+## Tendencia intergeneracional (ENDS 1990–2025)
+
+Porcentaje de mujeres de 20 a 24 años que tuvo su primera relación sexual **antes de
+los 18 años**, comparando todas las rondas de la ENDS (Gráfico 5.2).
+
+```{r inicio-tendencia}
+inicio_tendencia <- tibble(
+  ends = c(1990, 1995, 2000, 2005, 2010, 2015, 2025),
+  pct  = c(30.1, 40.6, 44.5, 53.6, 60.3, 65.0, 70.5)
+)
+
+ggplot(inicio_tendencia, aes(ends, pct)) +
+  geom_line(color = pal[1], linewidth = 1.1) +
+  geom_point(color = pal[1], size = 3) +
+  geom_text(aes(label = paste0(pct, "%")), vjust = -1, size = 3.3) +
+  scale_x_continuous(breaks = inicio_tendencia$ends) +
+  scale_y_continuous(labels = label_percent(scale = 1), limits = c(0, 80)) +
+  labs(
+    title = "Inicio sexual antes de los 18 años se ha más que duplicado",
+    subtitle = "Mujeres de 20 a 24 años, comparación entre rondas de la ENDS",
+    x = "Ronda ENDS", y = "% con inicio antes de los 18"
+  )
+```
+
+**Lectura.** El indicador pasó de **30,1 % (1990) a 70,5 % (2025)**: las cohortes más
+jóvenes inician su vida sexual —y por tanto su exposición— cada vez más temprano.
+
+## Efecto de cohorte dentro de la ENDS 2025
+
+Dentro de una misma encuesta, las mujeres más jóvenes reportan inicios más tempranos.
+Usamos el % que tuvo relaciones **antes de los 15 años** y la **edad mediana** de la
+primera relación por grupo de edad actual (Tabla 5.3, total urbano + rural).
+
+```{r inicio-cohorte}
+niveles_edad <- c("15-19","20-24","25-29","30-34","35-39","40-44","45-49")
+
+inicio_cohorte <- tibble(
+  grupo_edad = factor(niveles_edad, levels = niveles_edad),
+  antes_15   = c(24.8, 14.5, 14.2, 13.1, 11.6, 12.0, 10.5),
+  mediana    = c(15,   16,   16,   17,   17,   17,   17)
+)
+
+ggplot(inicio_cohorte, aes(grupo_edad, antes_15)) +
+  geom_col(fill = pal[2], width = 0.7) +
+  geom_text(aes(label = paste0(antes_15, "%")), vjust = -0.4, size = 3.2) +
+  scale_y_continuous(labels = label_percent(scale = 1), limits = c(0, 30)) +
+  labs(
+    title = "Cuanto más joven la cohorte, más temprano el inicio sexual",
+    subtitle = "% de mujeres que tuvo su primera relación antes de los 15 años (ENDS 2025)",
+    x = "Grupo de edad actual", y = "% antes de los 15 años"
+  )
+
+inicio_cohorte   # la edad mediana baja de 17 a 15 años entre las más jóvenes
+```
+
+---
+
+# Estado conyugal y Segunda Transición Demográfica
+
+## Distribución por grupo de edad (mujeres 13–49)
+
+Reconstruimos la Tabla 5.12 (total nacional) y la graficamos como barras apiladas al
+100 %. El estado conyugal es un determinante directo de la exposición: la unión
+concentra la mayor frecuencia de relaciones sexuales recientes.
+
+```{r conyugal-edad}
+niveles_edad2 <- c("13-14", niveles_edad)
+
+conyugal_edad <- tribble(
+  ~grupo_edad, ~`Nunca unida`, ~Casada, ~`Unión libre`, ~`Separada/divorciada`, ~Viuda,
+  "13-14", 99.0, 0.0,  0.9,  0.1, 0.0,
+  "15-19", 88.0, 0.2, 10.9,  0.9, 0.1,
+  "20-24", 61.3, 2.1, 32.4,  4.1, 0.1,
+  "25-29", 44.0, 7.1, 40.8,  7.9, 0.2,
+  "30-34", 32.8, 11.4, 43.3, 11.6, 0.9,
+  "35-39", 26.5, 16.3, 42.7, 13.6, 1.0,
+  "40-44", 25.2, 20.4, 38.7, 13.9, 1.8,
+  "45-49", 21.1, 22.6, 36.4, 16.6, 3.3
+)
+
+orden_estado <- c("Nunca unida","Unión libre","Casada","Separada/divorciada","Viuda")
+
+conyugal_largo <- conyugal_edad %>%
+  pivot_longer(-grupo_edad, names_to = "estado", values_to = "pct") %>%
+  mutate(
+    grupo_edad = factor(grupo_edad, levels = niveles_edad2),
+    estado     = factor(estado, levels = orden_estado)
+  )
+
+ggplot(conyugal_largo, aes(grupo_edad, pct, fill = estado)) +
+  geom_col(position = "fill", width = 0.85) +
+  scale_y_continuous(labels = label_percent()) +
+  scale_fill_manual(values = pal) +
+  labs(
+    title = "El estado conyugal cambia con la edad",
+    subtitle = "Distribución del estado conyugal de las mujeres de 13 a 49 años (ENDS 2025)",
+    x = "Grupo de edad actual", y = NULL
+  )
+```
+
+**Lectura.** La **unión libre** supera al **matrimonio** en todos los grupos de edad:
+es la forma predominante de unión en Colombia.
+
+## Tendencia temporal (2010–2015–2025)
+
+Comparación entre rondas para tres estados clave (texto del apartado 5.4.2.1). El dato
+de "nunca unida" en 2010 no fue reportado, por lo que queda como `NA`.
+
+```{r conyugal-tendencia}
+conyugal_tendencia <- tribble(
+  ~anio, ~estado,        ~pct,
+  2010,  "Casada",       19.2,
+  2015,  "Casada",       17.3,
+  2025,  "Casada",       10.0,
+  2010,  "Unión libre",  33.3,
+  2015,  "Unión libre",  32.6,
+  2025,  "Unión libre",  32.9,
+  2015,  "Nunca unida",  35.6,
+  2025,  "Nunca unida",  47.6
+)
+
+ggplot(conyugal_tendencia, aes(anio, pct, color = estado)) +
+  geom_line(linewidth = 1.1, na.rm = TRUE) +
+  geom_point(size = 3) +
+  geom_text(aes(label = paste0(pct, "%")), vjust = -0.9, size = 3, show.legend = FALSE) +
+  scale_x_continuous(breaks = c(2010, 2015, 2025)) +
+  scale_y_continuous(labels = label_percent(scale = 1), limits = c(0, 55)) +
+  scale_color_manual(values = pal[c(3,1,2)]) +
+  labs(
+    title = "Señales de la Segunda Transición Demográfica",
+    subtitle = "Mujeres de 13 a 49 años: comparación entre rondas de la ENDS",
+    x = NULL, y = "% del total"
+  )
+```
+
+**Lectura.** Sube "nunca unida" (35,6 % → 47,6 %), cae con fuerza el matrimonio
+(19,2 % → 10,0 %) y la unión libre se mantiene estable y alta: menos institución
+formal, más consensualidad y postergación de la unión (Flórez y Sánchez, 2013).
+
+---
+
+# Edad a la primera unión: gradientes socioeconómicos de la exposición
+
+La ENDS lo dice explícitamente: *"entre más joven sea la pareja en el momento de la
+unión, especialmente la mujer, mayor será el tiempo de exposición al riesgo de
+embarazo"*. La edad promedio nacional a la primera unión de las mujeres es **21,3
+años**. Veamos cómo varía.
+
+```{r union-gradientes}
+nac_union <- 21.3  # promedio nacional (Tabla 5.18)
+
+# Por quintil de riqueza
+union_quintil <- tibble(
+  quintil = factor(c("Más bajo","Bajo","Medio","Alto","Más alto"),
+                   levels = c("Más bajo","Bajo","Medio","Alto","Más alto")),
+  edad    = c(19.8, 20.6, 21.3, 21.9, 22.9)
+)
+
+# Por nivel educativo
+union_educ <- tibble(
+  nivel = factor(c("Sin educación","Primaria","Secundaria","Superior"),
+                 levels = c("Sin educación","Primaria","Secundaria","Superior")),
+  edad  = c(20.3, 20.6, 20.6, 22.8)
+)
+
+p_quintil <- ggplot(union_quintil, aes(quintil, edad)) +
+  geom_col(fill = pal[1], width = 0.7) +
+  geom_hline(yintercept = nac_union, linetype = "dashed", color = "grey40") +
+  geom_text(aes(label = edad), vjust = -0.4, size = 3.2) +
+  coord_cartesian(ylim = c(18, 24)) +
+  labs(title = "Por quintil de riqueza", x = NULL, y = "Edad promedio 1ª unión")
+
+p_educ <- ggplot(union_educ, aes(nivel, edad)) +
+  geom_col(fill = pal[3], width = 0.7) +
+  geom_hline(yintercept = nac_union, linetype = "dashed", color = "grey40") +
+  geom_text(aes(label = edad), vjust = -0.4, size = 3.2) +
+  coord_cartesian(ylim = c(18, 24)) +
+  labs(title = "Por nivel educativo", x = NULL, y = NULL)
+
+p_quintil  # línea discontinua = promedio nacional (21,3)
+p_educ
+```
+
+**Lectura.** A mayor quintil de riqueza y mayor nivel educativo, **más tardía** la
+primera unión (del quintil más bajo, 19,8, al más alto, 22,9; de secundaria, 20,6, a
+superior, 22,8). La postergación reduce el tiempo de exposición en edades jóvenes.
+
+---
+
+# Diferencia de edad con la primera pareja: asimetrías de poder
+
+La brecha de edad con la primera pareja conyugal es un **indicador de asimetría de
+poder** (negociación sobre sexualidad, anticoncepción y economía del hogar).
+Reconstruimos la Tabla 5.20 (mujeres alguna vez unidas).
+
+```{r dif-edad}
+niveles_dif <- c("Ella mayor","0–2 años","3–5 años","6–9 años",
+                 "10–14 años","15–19 años","20+ años","No sabe")
+
+dif_edad <- tibble(
+  categoria = factor(niveles_dif, levels = niveles_dif),
+  urbana    = c(12.4, 22.8, 21.4, 15.5, 7.7, 3.3, 3.9, 13.0),
+  rural     = c( 9.2, 19.8, 16.9, 17.1, 9.8, 8.1, 4.7, 14.4),
+  nacional  = c(11.7, 22.2, 20.5, 15.8, 8.1, 4.3, 4.0, 13.3)
+)
+
+# Distribución nacional
+ggplot(dif_edad, aes(categoria, nacional)) +
+  geom_col(fill = pal[5], width = 0.75) +
+  geom_text(aes(label = paste0(nacional, "%")), vjust = -0.4, size = 3) +
+  scale_y_continuous(labels = label_percent(scale = 1), limits = c(0, 25)) +
+  labs(
+    title = "Diferencia de edad con la primera pareja conyugal",
+    subtitle = "Mujeres de 13 a 49 años alguna vez unidas (ENDS 2025)",
+    x = "La pareja es mayor que ella en...", y = NULL
+  ) +
+  theme(axis.text.x = element_text(angle = 30, hjust = 1))
+```
+
+Ahora **derivamos un indicador compuesto**: proporción de mujeres cuya primera pareja
+era **al menos 10 años mayor**, comparando zona urbana y rural.
+
+```{r dif-edad-compuesto}
+brecha_10 <- dif_edad %>%
+  filter(categoria %in% c("10–14 años","15–19 años","20+ años")) %>%
+  summarise(
+    Urbana   = sum(urbana),
+    Rural    = sum(rural),
+    Nacional = sum(nacional)
+  ) %>%
+  pivot_longer(everything(), names_to = "zona", values_to = "pct") %>%
+  mutate(zona = factor(zona, levels = c("Urbana","Nacional","Rural")))
+
+brecha_10
+
+ggplot(brecha_10, aes(zona, pct, fill = zona)) +
+  geom_col(width = 0.6, show.legend = FALSE) +
+  geom_text(aes(label = paste0(round(pct, 1), "%")), vjust = -0.4, size = 3.5) +
+  scale_y_continuous(labels = label_percent(scale = 1), limits = c(0, 25)) +
+  scale_fill_manual(values = c("#9ecae1", "#6baed6", "#2171b5")) +
+  labs(
+    title = "La asimetría de edad es mayor en la zona rural",
+    subtitle = "% de mujeres cuya 1ª pareja era ≥10 años mayor que ella",
+    x = NULL, y = NULL
+  )
+```
+
+**Lectura.** A nivel nacional **1 de cada 6 mujeres (16,4 %)** se unió con una pareja
+al menos 10 años mayor; en la zona **rural la cifra sube a 22,6 %** frente a **14,9 %**
+urbana. Mayor brecha de edad ⇒ mayor asimetría de poder en la relación.
+
+---
+
+# Uniones tempranas y matrimonio infantil (MIUT)
+
+La ENDS 2025 incorpora el monitoreo del **matrimonio infantil y las uniones tempranas
+(MIUT)** tras la **Ley 2447 de 2025**, que prohíbe estas prácticas. El dato de
+referencia (Anexo 5.1): quiénes se unieron **antes de los 18 años**.
+
+```{r union-temprana}
+union_temprana <- tibble(
+  sexo     = c("Mujeres", "Hombres"),
+  antes_18 = c(24.9, 8.3)
+)
+
+ggplot(union_temprana, aes(reorder(sexo, -antes_18), antes_18, fill = sexo)) +
+  geom_col(width = 0.6, show.legend = FALSE) +
+  geom_text(aes(label = paste0(antes_18, "%")), vjust = -0.4, size = 4) +
+  scale_y_continuous(labels = label_percent(scale = 1), limits = c(0, 30)) +
+  scale_fill_manual(values = pal[c(4,1)]) +
+  labs(
+    title = "Uniones antes de los 18 años, por sexo",
+    subtitle = "Primera unión conyugal antes de los 18 (ENDS 2025)",
+    x = NULL, y = NULL
+  )
+```
+
+**Lectura.** **Casi 1 de cada 4 mujeres (24,9 %)** frente a **8,3 % de los hombres**
+se unió antes de los 18: la unión temprana es un fenómeno fuertemente feminizado, con
+implicaciones directas en embarazo adolescente, deserción escolar y salud materna.
+
+---
+
+# Síntesis: la ventana de exposición por quintil de riqueza
+
+Cerramos integrando dos hitos del ciclo reproductivo —**inicio sexual** y **primera
+unión**— para visualizar cómo se **abre más temprano la ventana de exposición** en los
+quintiles de menor riqueza.
+
+```{r sintesis}
+exposicion_quintil <- tibble(
+  quintil = factor(c("Más bajo","Bajo","Medio","Alto","Más alto"),
+                   levels = c("Más bajo","Bajo","Medio","Alto","Más alto")),
+  `1ª relación sexual` = c(16.4, 16.5, 16.7, 16.9, 17.1),  # Tabla 5.5
+  `1ª unión conyugal`  = c(19.8, 20.6, 21.3, 21.9, 22.9)   # Tabla 5.18
+)
+
+exp_largo <- exposicion_quintil %>%
+  pivot_longer(-quintil, names_to = "hito", values_to = "edad")
+
+ggplot() +
+  geom_segment(
+    data = exposicion_quintil,
+    aes(x = `1ª relación sexual`, xend = `1ª unión conyugal`,
+        y = quintil, yend = quintil),
+    color = "grey70", linewidth = 1.6
+  ) +
+  geom_point(data = exp_largo, aes(edad, quintil, color = hito), size = 4.5) +
+  geom_text(data = exp_largo, aes(edad, quintil, label = edad),
+            vjust = -1.1, size = 3, show.legend = FALSE) +
+  scale_color_manual(values = pal[c(2,1)]) +
+  labs(
+    title = "La ventana de exposición se abre antes en los quintiles más bajos",
+    subtitle = "Edad promedio al inicio sexual y a la primera unión, mujeres 13–49 (ENDS 2025)",
+    x = "Edad (años)", y = NULL
+  )
+```
+
+Podemos cuantificar el **rezago entre inicio sexual y unión** (una aproximación al
+período de exposición previo a la unión) por quintil:
+
+```{r sintesis-tabla}
+exposicion_quintil %>%
+  mutate(`Rezago (años)` = round(`1ª unión conyugal` - `1ª relación sexual`, 1)) %>%
+  arrange(quintil)
+```
+
+**Síntesis general.** Los quintiles más pobres combinan **inicio sexual más temprano**
+y **unión más temprana**: la exposición al riesgo de embarazo comienza antes y se
+concentra en edades más jóvenes. El gradiente educativo y de riqueza, la brecha de
+edad con la pareja (mayor en zonas rurales) y la persistencia de uniones tempranas
+femeninas dibujan un mapa de **desigualdades estructurales** en salud sexual y
+reproductiva, coherente con el enfoque de determinantes sociales que adopta la ENDS.
+
+---
+
+# Ejercicios propuestos
+
+1. **Replique para hombres.** Reconstruya la Tabla 5.4 (inicio sexual masculino, edad
+   mediana por grupo de edad) y compare las medianas con las de las mujeres en un
+   mismo gráfico. ¿Se confirma que los hombres inician antes?
+
+2. **Añada la dimensión regional.** Incorpore la columna 13–49 de la Tabla 5.18 por
+   región (Atlántica, Oriental, Central, Bogotá, Pacífica, Orinoquía-Amazonía) y
+   ordene las regiones por edad a la primera unión con `forcats::fct_reorder()`.
+
+3. **Indicador de asimetría.** Generalice el indicador "pareja ≥10 años mayor" a las
+   subregiones de la Tabla 5.20 y proponga un pequeño ranking de asimetría de poder.
+
+4. **Número de uniones.** Con la Tabla 5.22, grafique el % de mujeres con 2 y con 3+
+   uniones por grupo de edad y discuta la relación con la Segunda Transición
+   Demográfica.
+
+---
+
+# Referencia
+
+Ministerio de Salud y Protección Social (2025). *Nupcialidad y exposición al riesgo de
+embarazo*. Capítulo 5, Encuesta Nacional de Demografía y Salud (ENDS) 2025. Recuperado
+de la Biblioteca Digital del Minsalud.
+
+<!--
+Reproducibilidad:
+- Todas las cifras provienen de las tablas y gráficos del Capítulo 5 de la publicación.
+- Los datos se ingresan como tibbles para que el documento sea autocontenido y knit
+  corra sin acceso a internet ni a microdatos.
+- Para tejer (knit) a HTML: rmarkdown::render("taller_nupcialidad_ends2025.Rmd")
+-->
