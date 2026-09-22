@@ -1,0 +1,418 @@
+---
+title: "Esperanza de vida al nacer y esperanza de vida saludable"
+subtitle: "Taller en R — Dinámica Poblacional y Demografía"
+output:
+  html_document:
+    toc: true
+    toc_float: true
+    number_sections: true
+    df_print: paged
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(message = FALSE, warning = FALSE,
+                      fig.width = 9, fig.height = 5.5, fig.align = "center")
+```
+
+**Datos:** Observatorio Mundial de la Salud (GHO) de la OMS, *Global Health Estimates 2021* (años 2000–2021, 185 países).
+
+**Objetivos del taller**
+
+1. Distinguir la esperanza de vida al nacer (e0) de la esperanza de vida saludable al nacer (HALE).
+2. Calcular cuántos años, en promedio, se esperaría vivir con mala salud.
+3. Comparar Colombia en el tiempo, por sexo y frente a otros países.
+
+**Antes de empezar**
+
+- Cree una carpeta para el taller, idealmente un Proyecto de RStudio (*File > New Project > New Directory*).
+- Guarde en esa carpeta este archivo `.Rmd` y el archivo `oms_hale.csv`.
+- Ejecute cada bloque de código (*chunk*) con la flecha verde de su esquina superior derecha, o con **Ctrl + Shift + Enter** (Cmd + Shift + Enter en Mac). Para ejecutar una sola línea use **Ctrl + Enter**.
+- Cuando termine, presione el botón **Knit** para generar un informe en HTML con el texto, el código y los gráficos.
+- Necesita conexión a internet para la sección 4.
+
+> **Nota de vocabulario:** "expectativa de vida" y "esperanza de vida" se usan como sinónimos; en demografía y en los documentos de la OMS en español es más frecuente "esperanza de vida".
+
+# Conceptos básicos
+
+**Esperanza de vida al nacer (e0).** Número promedio de años que viviría un recién nacido si, a lo largo de toda su vida, se mantuvieran las tasas de mortalidad por edad observadas en un año dado. Es un indicador de *período*: resume la mortalidad de ese año; no es un pronóstico de cuánto vivirá realmente la cohorte nacida ese año.
+
+**Esperanza de vida saludable al nacer (HALE, *Health-Adjusted Life Expectancy*).** Número promedio de años que ese recién nacido viviría en "plena salud". Descuenta de e0 los años que se viven con enfermedad o discapacidad, ponderados según su gravedad. La OMS la calcula con el método de Sullivan, que combina la tabla de vida con la prevalencia de mala salud en cada edad.
+
+A partir de ambas construiremos dos medidas:
+
+$$\text{Años con mala salud} = e_0 - \text{HALE} \qquad\qquad \text{\% de vida saludable} = 100 \times \frac{\text{HALE}}{e_0}$$
+
+**Pregunta que guía el taller:** cuando la gente vive más años, ¿esos años adicionales son años saludables?
+
+# Paquetes
+
+Si es la primera vez que usa estos paquetes, instálelos ejecutando en la consola (solo una vez):
+
+```{r instalar, eval=FALSE}
+install.packages(c("dplyr", "tidyr", "ggplot2", "readr", "jsonlite", "rmarkdown"))
+```
+
+Luego cárguelos:
+
+```{r paquetes}
+library(dplyr)     # manipular tablas
+library(tidyr)     # cambiar la forma de las tablas (ancho <-> largo)
+library(ggplot2)   # gráficos
+library(readr)     # leer archivos .csv
+library(jsonlite)  # leer datos en formato JSON (sección 4)
+```
+
+# Datos de esperanza de vida saludable
+
+Leemos el archivo descargado de la OMS y le damos una primera mirada: ¿cuántas filas y columnas tiene?, ¿qué tipo de variables?
+
+```{r leer-hale}
+hale_raw <- read_csv("/Users/oscar/Documents/Demografía26/oms_hale.csv")
+glimpse(hale_raw)
+```
+
+Muchas columnas están vacías. El archivo trae **dos** indicadores: `WHOSIS_000002` es la HALE al nacer (la que usaremos) y `WHOSIS_000007` es la HALE a los 60 años (la retomamos en los ejercicios).
+
+```{r indicadores}
+count(hale_raw, IndicatorCode, Indicator)
+```
+
+¿Cómo viene un dato? La columna `Value` es texto con el intervalo de incertidumbre entre corchetes; el valor numérico está en `FactValueNumeric`.
+
+```{r ver-valores}
+hale_raw |>
+  select(Location, Period, Dim1, Value, FactValueNumeric) |>
+  head()
+```
+
+Nos quedamos con la HALE al nacer y con las columnas que necesitamos, renombradas y traducidas al español.
+
+```{r limpiar-hale}
+hale <- hale_raw |>
+  filter(IndicatorCode == "WHOSIS_000002") |>
+  select(iso3   = SpatialDimValueCode,   # código de país (COL, ARG, ...)
+         pais   = Location,
+         region = ParentLocation,        # región de la OMS
+         anio   = Period,
+         sexo   = Dim1,
+         hale   = FactValueNumeric) |>
+  mutate(
+    sexo = recode(sexo,
+                  "Both sexes" = "Ambos sexos",
+                  "Female"     = "Mujeres",
+                  "Male"       = "Hombres"),
+    region = recode(region,
+                    "Africa"                = "África",
+                    "Americas"              = "Américas",
+                    "Eastern Mediterranean" = "Mediterráneo Oriental",
+                    "Europe"                = "Europa",
+                    "South-East Asia"       = "Asia Sudoriental",
+                    "Western Pacific"       = "Pacífico Occidental")
+  )
+
+# Verificación con Colombia en el último año disponible
+hale |> filter(pais == "Colombia", anio == 2021)
+```
+
+# Datos de esperanza de vida al nacer
+
+El archivo anterior solo trae HALE. La esperanza de vida al nacer (indicador `WHOSIS_000001`) la descargamos directamente del Observatorio Mundial de la Salud, a través de su API. Así ambas medidas vienen de la misma fuente y la misma ronda de estimaciones.
+
+```{r descargar-e0}
+url_ev <- "https://ghoapi.azureedge.net/api/WHOSIS_000001"
+ev_api <- fromJSON(url_ev)$value
+
+# La API trae países, regiones, grupos de ingreso y el total mundial
+count(ev_api, SpatialDimType)
+```
+
+Nos quedamos solo con los países y usamos los mismos nombres de columnas que en la base de HALE.
+
+```{r limpiar-e0}
+ev <- ev_api |>
+  filter(SpatialDimType == "COUNTRY") |>
+  select(iso3 = SpatialDim,
+         anio = TimeDim,
+         sexo = Dim1,
+         e0   = NumericValue) |>
+  mutate(sexo = recode(sexo,
+                       "SEX_BTSX" = "Ambos sexos",
+                       "SEX_FMLE" = "Mujeres",
+                       "SEX_MLE"  = "Hombres"))
+
+range(ev$anio)   # años cubiertos
+```
+
+> **Plan B, si la API no responde.** En <https://www.who.int/data/gho> busque el indicador *"Life expectancy at birth (years)"* y descárguelo en CSV, igual que se hizo con el archivo de HALE. Guárdelo en la carpeta del taller como `oms_esperanza_vida.csv`. Luego cambie `eval=FALSE` por `eval=TRUE` en el bloque siguiente y ponga `eval=FALSE` en los dos bloques anteriores.
+
+```{r plan-b, eval=FALSE}
+ev <- read_csv("oms_esperanza_vida.csv") |>
+  select(iso3 = SpatialDimValueCode,
+         anio = Period,
+         sexo = Dim1,
+         e0   = FactValueNumeric) |>
+  mutate(sexo = recode(sexo,
+                       "Both sexes" = "Ambos sexos",
+                       "Female"     = "Mujeres",
+                       "Male"       = "Hombres"))
+```
+
+# Unir las dos bases y calcular las medidas
+
+Unimos por país, año y sexo, de modo que cada fila tenga e0 y HALE.
+
+```{r unir}
+datos <- hale |>
+  inner_join(ev, by = c("iso3", "anio", "sexo")) |>
+  mutate(anios_mala_salud = e0 - hale,
+         pct_saludable    = 100 * hale / e0)
+
+# Deberían ser 185 países x 22 años x 3 categorías de sexo = 12.210 filas
+nrow(datos)
+```
+
+Definimos el año de referencia para las comparaciones (más adelante puede cambiarlo) y el texto de la fuente para los gráficos.
+
+```{r parametros}
+anio_ref <- 2021
+fuente   <- "Fuente: OMS, Global Health Observatory (Global Health Estimates 2021)."
+```
+
+# Colombia, 2000–2021
+
+```{r colombia-tabla}
+colombia <- datos |>
+  filter(iso3 == "COL", sexo == "Ambos sexos")
+
+colombia |>
+  select(anio, e0, hale, anios_mala_salud, pct_saludable)
+```
+
+La franja gris del gráfico representa los años que se esperaría vivir con mala salud.
+
+```{r colombia-grafico}
+ggplot(colombia, aes(x = anio)) +
+  geom_ribbon(aes(ymin = hale, ymax = e0), fill = "grey85") +
+  geom_line(aes(y = e0,   colour = "Esperanza de vida al nacer"), linewidth = 1.1) +
+  geom_line(aes(y = hale, colour = "Esperanza de vida saludable (HALE)"), linewidth = 1.1) +
+  scale_colour_manual(values = c("Esperanza de vida al nacer"         = "#1b6ca8",
+                                 "Esperanza de vida saludable (HALE)" = "#e07a1f")) +
+  labs(title    = "Colombia: esperanza de vida total y saludable, 2000–2021",
+       subtitle = "La franja gris representa los años que se esperaría vivir con mala salud",
+       x = NULL, y = "Años", colour = NULL, caption = fuente) +
+  theme_minimal(base_size = 12) +
+  theme(legend.position = "bottom")
+```
+
+**Preguntas**
+
+a) ¿Cuántos años ganó Colombia en e0 entre 2000 y 2019? ¿Y en HALE?
+b) ¿Qué ocurre en 2020 y 2021? ¿Qué acontecimiento lo explica?
+c) ¿La franja gris se ensancha o se mantiene? ¿Qué significa eso?
+
+# Diferencias por sexo en Colombia
+
+```{r sexo-tabla}
+col_sexo <- datos |>
+  filter(iso3 == "COL", anio == anio_ref, sexo != "Ambos sexos") |>
+  select(sexo, e0, hale, anios_mala_salud, pct_saludable)
+
+col_sexo
+```
+
+Para graficar pasamos la tabla a formato "largo": cada barra (cuya altura total es e0) se divide en años saludables y años con mala salud.
+
+```{r sexo-grafico, fig.width=7}
+col_sexo_largo <- col_sexo |>
+  select(sexo, "Años saludables" = hale, "Años con mala salud" = anios_mala_salud) |>
+  pivot_longer(-sexo, names_to = "componente", values_to = "anios") |>
+  mutate(componente = factor(componente,
+                             levels = c("Años con mala salud", "Años saludables")))
+
+ggplot(col_sexo_largo, aes(x = sexo, y = anios, fill = componente)) +
+  geom_col(width = 0.6) +
+  geom_text(aes(label = round(anios, 1)),
+            position = position_stack(vjust = 0.5), colour = "white") +
+  scale_fill_manual(values = c("Años saludables"     = "#1b6ca8",
+                               "Años con mala salud" = "#c0392b")) +
+  labs(title = paste0("Colombia, ", anio_ref, ": composición de la esperanza de vida por sexo"),
+       subtitle = "La altura total de cada barra es la esperanza de vida al nacer",
+       x = NULL, y = "Años", fill = NULL, caption = fuente) +
+  theme_minimal(base_size = 12)
+```
+
+**Preguntas**
+
+a) ¿Quiénes viven más años? ¿Quiénes viven más años con mala salud?
+b) La literatura llama a esto la "paradoja salud-supervivencia" entre mujeres y hombres. ¿Qué factores biológicos y sociales podrían explicarla?
+
+# Colombia frente a América Latina
+
+```{r al-datos}
+america_latina <- c("ARG", "BOL", "BRA", "CHL", "COL", "CRI", "CUB", "DOM",
+                    "ECU", "SLV", "GTM", "HND", "HTI", "MEX", "NIC", "PAN",
+                    "PRY", "PER", "URY", "VEN")
+
+al <- datos |>
+  filter(iso3 %in% america_latina, anio == anio_ref, sexo == "Ambos sexos") |>
+  mutate(pais = reorder(pais, e0))   # ordena los países según e0
+
+al_largo <- al |>
+  select(pais, "Años saludables" = hale, "Años con mala salud" = anios_mala_salud) |>
+  pivot_longer(-pais, names_to = "componente", values_to = "anios") |>
+  mutate(componente = factor(componente,
+                             levels = c("Años con mala salud", "Años saludables")))
+```
+
+```{r al-grafico, fig.height=7}
+ggplot(al_largo, aes(x = anios, y = pais, fill = componente)) +
+  geom_col() +
+  scale_fill_manual(values = c("Años saludables"     = "#1b6ca8",
+                               "Años con mala salud" = "#c0392b")) +
+  labs(title = paste0("América Latina, ", anio_ref, ": esperanza de vida total y saludable"),
+       subtitle = "Países ordenados por esperanza de vida al nacer. Ambos sexos",
+       x = "Años", y = NULL, fill = NULL, caption = fuente) +
+  theme_minimal(base_size = 12) +
+  theme(legend.position = "bottom")
+```
+
+Tabla ordenada por porcentaje de vida saludable:
+
+```{r al-tabla}
+al |>
+  arrange(desc(pct_saludable)) |>
+  select(pais, e0, hale, anios_mala_salud, pct_saludable)
+```
+
+**Preguntas**
+
+a) ¿En qué posición está Colombia en e0? ¿Y en HALE?
+b) ¿El país con mayor e0 es también el de mayor porcentaje de vida saludable?
+
+# Panorama mundial: ¿vivir más es vivir más años sanos?
+
+```{r mundo-datos}
+mundo <- datos |>
+  filter(anio == anio_ref, sexo == "Ambos sexos")
+```
+
+## Relación entre e0 y HALE
+
+La línea punteada marca los puntos donde HALE sería igual a e0, es decir, donde toda la vida transcurriría en plena salud. Cuanto más lejos de esa línea está un país, más años de mala salud.
+
+```{r mundo-grafico1}
+g_mundo <- ggplot(mundo, aes(x = e0, y = hale, colour = region)) +
+  geom_abline(intercept = 0, slope = 1, linetype = "dashed", colour = "grey50") +
+  geom_point(alpha = 0.8, size = 2) +
+  geom_point(data = filter(mundo, iso3 == "COL"), colour = "black", size = 4, shape = 21) +
+  annotate("text", x = 60, y = 70, label = "Línea: HALE = e0\n(toda la vida en plena salud)",
+           colour = "grey40", size = 3.3) +
+  labs(title = paste0("Esperanza de vida al nacer y esperanza de vida saludable, ", anio_ref),
+       subtitle = "Cada punto es un país. El círculo negro es Colombia",
+       x = "Esperanza de vida al nacer (años)",
+       y = "Esperanza de vida saludable (años)",
+       colour = "Región OMS", caption = fuente) +
+  theme_minimal(base_size = 12)
+
+g_mundo
+```
+
+## ¿Los países donde se vive más tienen más años con mala salud?
+
+```{r mundo-grafico2}
+ggplot(mundo, aes(x = e0, y = anios_mala_salud)) +
+  geom_point(aes(colour = region), alpha = 0.8, size = 2) +
+  geom_smooth(method = "lm", se = FALSE, colour = "black") +
+  labs(title = "Esperanza de vida y años vividos con mala salud",
+       subtitle = paste0("Países, ambos sexos, ", anio_ref),
+       x = "Esperanza de vida al nacer (años)",
+       y = "Años con mala salud (e0 - HALE)",
+       colour = "Región OMS", caption = fuente) +
+  theme_minimal(base_size = 12)
+```
+
+Correlación y regresión lineal simple. El coeficiente de `e0` indica cuántos años de mala salud "vienen", en promedio, con cada año adicional de esperanza de vida, comparando países.
+
+```{r mundo-modelo}
+cor(mundo$e0, mundo$anios_mala_salud)
+
+modelo <- lm(anios_mala_salud ~ e0, data = mundo)
+summary(modelo)
+```
+
+## Promedios por región
+
+Se trata de promedios simples de los países de cada región, sin ponderar por población.
+
+```{r mundo-regiones}
+mundo |>
+  group_by(region) |>
+  summarise(paises           = n(),
+            e0               = mean(e0),
+            hale             = mean(hale),
+            anios_mala_salud = mean(anios_mala_salud),
+            pct_saludable    = mean(pct_saludable)) |>
+  arrange(desc(e0))
+```
+
+## Para discutir
+
+En la demografía de la salud hay tres hipótesis clásicas:
+
+- **Compresión de la morbilidad** (Fries, 1980): la mala salud se concentra en un período cada vez más corto al final de la vida.
+- **Expansión de la morbilidad** (Gruenberg, 1977; Kramer, 1980): sobrevivimos más, pero con más años de enfermedad crónica y discapacidad.
+- **Equilibrio dinámico** (Manton, 1982): aumentan los años con enfermedad, pero con enfermedades menos graves.
+
+¿Qué sugieren los gráficos? Ojo: estamos comparando países en un solo año (datos transversales). Para evaluar estas hipótesis habría que seguir a los mismos países en el tiempo (vea el ejercicio 2).
+
+# Guardar un gráfico
+
+`ggsave()` guarda un gráfico como imagen en la carpeta del taller. Aquí guardamos el gráfico mundial, que quedó almacenado en el objeto `g_mundo`.
+
+```{r guardar}
+ggsave("grafico_mundo.png", plot = g_mundo, width = 9, height = 6, dpi = 300)
+```
+
+# Ejercicios
+
+**1. Efecto de la pandemia.** Cambie `anio_ref` a 2019 (sección 5) y vuelva a ejecutar las secciones 7 a 9. ¿Qué cambia respecto a 2021? Luego calcule qué países de América Latina perdieron más e0 entre 2019 y 2021. Pista:
+
+```{r ej1, eval=FALSE}
+datos |>
+  filter(iso3 %in% america_latina, sexo == "Ambos sexos",
+         anio %in% c(2019, 2021)) |>
+  select(pais, anio, e0) |>
+  pivot_wider(names_from = anio, values_from = e0, names_prefix = "e0_") |>
+  mutate(cambio = e0_2021 - e0_2019) |>
+  arrange(cambio)
+```
+
+**2. Cambio en el tiempo.** Calcule, para cada país, el cambio en e0 y en los años con mala salud entre 2000 y 2019. ¿En la mayoría de países los años con mala salud aumentaron o disminuyeron? ¿Qué hipótesis de la sección 9 apoya este resultado?
+
+```{r ej2, eval=FALSE}
+# Escriba aquí su código
+
+```
+
+**3. Hombres y mujeres en el tiempo.** Rehaga el gráfico de la sección 6 para mujeres y hombres. Pista: filtre `sexo != "Ambos sexos"` y agregue `+ facet_wrap(~ sexo)` al gráfico.
+
+```{r ej3, eval=FALSE}
+# Escriba aquí su código
+
+```
+
+**4. HALE a los 60 años.** Vuelva a `hale_raw` y filtre `IndicatorCode == "WHOSIS_000007"`. Grafique su evolución en Colombia por sexo. ¿Cuántos años saludables le quedan en promedio a una persona de 60 años en Colombia? ¿Qué implicaciones tiene esto para los sistemas de pensiones y de cuidado?
+
+```{r ej4, eval=FALSE}
+# Escriba aquí su código
+
+```
+
+**5. Otra comparación.** Elija otro grupo de países (por ejemplo, los de una región de la OMS o países que le interesen) y repita el análisis de la sección 8.
+
+```{r ej5, eval=FALSE}
+# Escriba aquí su código
+
+```
+
+Cuando termine los ejercicios, cambie `eval=FALSE` por `eval=TRUE` en sus bloques y presione **Knit** para que sus resultados aparezcan en el informe.
