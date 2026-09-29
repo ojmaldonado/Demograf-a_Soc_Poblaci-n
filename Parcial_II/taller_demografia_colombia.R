@@ -240,8 +240,6 @@ barplot(esperanza$cambio,
         ylab = "Diferencia con el año anterior")
 
 # PARA DISCUTIR:
-# - 1985: en noviembre ocurrió la tragedia de Armero (erupción del
-#   Nevado del Ruiz). ¿Cómo aparece un evento así en este indicador?
 # - Entre mediados de los 80 y mediados de los 90 la esperanza de vida
 #   casi se estanca. ¿Qué pasaba en Colombia en esos años?
 #   (pista: la violencia homicida, que afectó sobre todo a hombres jóvenes)
@@ -395,32 +393,16 @@ dev.off()
 
 # ---- 6. EJERCICIOS ---------------------------------------------------
 #
-# E1. Cambie el color y el título del gráfico de fecundidad.
-#     Colores posibles: "tomato", "orchid", "navy", "darkorange"...
 #
-# E2. Calcule la TGF promedio de la década de 1970.
+# E1. Calcule la TGF promedio de la década de 1970.
 #     Pista:  mean(subset(fecundidad, anio >= 1970 & anio <= 1979)$tgf)
 #
-# E3. ¿Cuántos años de esperanza de vida se ganaron entre 1950 y 2019,
+# E2. ¿Cuántos años de esperanza de vida se ganaron entre 1950 y 2019,
 #     es decir, antes de la pandemia?
 #
-# E4. Agregue Costa Rica al gráfico comparativo de nupcialidad.
-#     Datos 2011-2022 (misma fuente):
-#     5.45, 5.61, 5.46, 5.43, 5.49, 5.46, 5.15, 4.72, 4.48, 3.69, 4.72, 4.39
-#     Pasos: (a) cree la columna  nupcialidad$costa_rica <- c(...)
-#            (b) súmela al gráfico con lines()
-#            (c) actualice la leyenda
-#     OJO: tendrá que ampliar el ylim del gráfico. ¿Por qué?
-#
-# E5. ¿En qué año la esperanza de vida en Colombia superó por primera
+# E3. ¿En qué año la esperanza de vida en Colombia superó por primera
 #     vez los 70 años?  Pista: use subset() y head(..., 1)
 #
-# E6. (Para discutir en grupo) Con estos tres indicadores, ¿en qué etapa
-#     de la transición demográfica ubicaría a Colombia hoy? ¿Qué
-#     consecuencias puede tener una TGF por debajo del nivel de
-#     reemplazo para la estructura por edad de la población?
-
-
 # ---- EXTRA: descargar los datos directamente de OWID ------------------
 #
 # Si tiene conexión a internet, puede leer los datos completos (todos
