@@ -1,0 +1,579 @@
+---
+title: "Taller: análisis descriptivo de la migración internacional en R"
+subtitle: "Población inmigrante por país, 1990–2024 — los mayores incrementos del mundo y el caso de Colombia"
+author: "Dinámica Poblacional y Demografía"
+date: "`r format(Sys.Date(), '%d/%m/%Y')`"
+output:
+  html_document:
+    toc: true
+    toc_float: true
+    number_sections: true
+    theme: flatly
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(
+  echo = TRUE, message = FALSE, warning = FALSE,
+  fig.width = 9, fig.height = 5.5, fig.align = "center"
+)
+options(scipen = 999)  # evita la notación científica en los resultados
+```
+
+# Presentación
+
+## Objetivos
+
+Al terminar el taller usted podrá:
+
+1. Descargar y explorar un conjunto de datos demográficos abierto (Our World in Data) desde RStudio.
+2. Distinguir entre **unidades de análisis** (países) y **agregados** (regiones, grupos de ingreso, mundo) dentro de una misma base.
+3. Calcular estadísticas descriptivas básicas: medidas de tendencia central, dispersión, posición y concentración.
+4. Medir el **cambio** de una población en el tiempo de tres formas (absoluto, porcentual y tasa de crecimiento anual compuesta) y discutir qué muestra y qué oculta cada una.
+5. Identificar los países con mayor incremento de población inmigrante en el mundo y situar a Colombia en ese panorama.
+
+## Los datos
+
+Usaremos la serie **"Migrant populations"** de Our World in Data (OWID), que reproduce las estimaciones de **stock de migrantes internacionales** de la División de Población de las Naciones Unidas (UN DESA). Antes de empezar, tres precisiones conceptuales que importan para todo lo que sigue:
+
+- **Inmigrante** = persona que vive en un país distinto al de su nacimiento (en algunos países, distinto al de su nacionalidad). No es una categoría jurídica: incluye personas con y sin estatus regular, refugiadas, etc.
+- Es un **stock** (cuántas personas nacidas fuera *viven* en el país en un año dado), **no un flujo** (cuántas *llegaron* ese año). Un stock crece por llegadas y disminuye por muertes, retornos y salidas hacia terceros países.
+- Las observaciones son **quinquenales** (1990, 1995, …, 2020) **más 2024**. El último intervalo dura 4 años, no 5: tendremos que tenerlo en cuenta al comparar periodos.
+
+Variables del archivo:
+
+| Variable original | Significado |
+|---|---|
+| `entity` | País o agregado (región, grupo de ingreso, mundo) |
+| `code` | Código ISO de 3 letras (los agregados de OWID empiezan por `OWID_`; algunos agregados de la ONU vienen vacíos) |
+| `year` | Año de la estimación |
+| `immigrants_all` | Número total de inmigrantes (stock) |
+| `owid_region` | Continente asignado por OWID (vacío en los agregados) |
+
+# Preparación
+
+## Paquetes
+
+Ejecute este bloque una vez. Instala los paquetes que falten y los carga.
+
+```{r paquetes}
+paquetes <- c("tidyverse", "scales", "knitr")
+faltantes <- paquetes[!paquetes %in% rownames(installed.packages())]
+if (length(faltantes) > 0) install.packages(faltantes)
+
+library(tidyverse)  # dplyr, tidyr, readr, ggplot2...
+library(scales)     # formato de números en tablas y gráficos
+library(knitr)      # tablas con kable()
+```
+
+## Descarga de los datos
+
+El bloque descarga el CSV directamente de OWID y guarda una copia local (`migrant-populations.csv`) en la carpeta del proyecto. Si la conexión falla durante la clase, basta con tener esa copia en la carpeta: el código la usará automáticamente.
+
+```{r datos}
+url_owid <- paste0(
+  "https://ourworldindata.org/grapher/migrant-populations.csv",
+  "?v=1&csvType=full&useColumnShortNames=true&metric=immigrants&unit=number"
+)
+archivo_local <- "migrant-populations.csv"
+
+if (file.exists(archivo_local)) {
+  migr_raw <- read_csv(archivo_local)
+} else {
+  migr_raw <- read_csv(url_owid)
+  write_csv(migr_raw, archivo_local)
+}
+```
+
+## Primera mirada
+
+```{r exploracion}
+glimpse(migr_raw)
+
+# ¿Qué años hay y cuántas entidades por año?
+migr_raw |> count(year)
+
+# ¿Cuántas entidades distintas?
+n_distinct(migr_raw$entity)
+```
+
+Renombramos las variables al español para trabajar con más comodidad:
+
+```{r renombrar}
+migr <- migr_raw |>
+  rename(
+    pais        = entity,
+    codigo      = code,
+    anio        = year,
+    inmigrantes = immigrants_all,
+    region      = owid_region
+  )
+```
+
+## Países vs. agregados: un paso crítico
+
+La base mezcla **países** con **agregados** ("World", "Europe", "High-income countries", "South America"…). Si calculamos promedios o rankings sin separarlos, Europa o el Mundo aparecerán como "países" con muchísimos inmigrantes. La variable `region` solo está llena para los países, así que nos sirve de filtro.
+
+```{r separar}
+paises <- migr |> filter(!is.na(region))
+agregados <- migr |> filter(is.na(region))
+mundo <- migr |> filter(pais == "World")
+
+# ¿Qué agregados hay?
+agregados |> distinct(pais) |> pull(pais)
+
+# ¿Cuántos países por año?
+paises |> count(anio)
+```
+
+**Control de calidad:** la suma de los países debería aproximarse al total mundial. ¿Coinciden?
+
+```{r control}
+paises |>
+  group_by(anio) |>
+  summarise(suma_paises = sum(inmigrantes, na.rm = TRUE)) |>
+  left_join(mundo |> select(anio, total_mundo = inmigrantes), by = "anio") |>
+  mutate(diferencia = total_mundo - suma_paises,
+         diferencia_pct = diferencia / total_mundo * 100) |>
+  kable(format.args = list(big.mark = ","), digits = 2)
+```
+
+> **Pregunta 1.** Si la diferencia no es cero, ¿qué territorios podrían estar en el total mundial pero no en la lista de "países" de OWID? ¿Qué decisiones de clasificación hay detrás de una categoría como "país"?
+
+# El panorama mundial
+
+## Evolución del total de inmigrantes
+
+Calcularemos tres medidas de cambio entre observaciones consecutivas:
+
+- **Cambio absoluto**: $X_t - X_{t-1}$.
+- **Cambio porcentual**: $\frac{X_t - X_{t-1}}{X_{t-1}} \times 100$.
+- **Tasa de crecimiento anual compuesta (TCAC)**: $\left[\left(\frac{X_t}{X_{t-1}}\right)^{1/n} - 1\right] \times 100$, donde $n$ es el número de años del intervalo. Es la única de las tres que permite comparar intervalos de distinta duración (recuerde: 2020–2024 dura 4 años).
+
+```{r mundo-tabla}
+mundo_cambio <- mundo |>
+  arrange(anio) |>
+  mutate(
+    cambio_abs = inmigrantes - lag(inmigrantes),
+    cambio_pct = cambio_abs / lag(inmigrantes) * 100,
+    n_anios    = anio - lag(anio),
+    tcac       = ((inmigrantes / lag(inmigrantes))^(1 / n_anios) - 1) * 100
+  ) |>
+  select(anio, inmigrantes, cambio_abs, cambio_pct, n_anios, tcac)
+
+mundo_cambio |> kable(format.args = list(big.mark = ","), digits = 2)
+```
+
+```{r mundo-grafico}
+ggplot(mundo, aes(x = anio, y = inmigrantes)) +
+  geom_line(linewidth = 1, colour = "#2c3e50") +
+  geom_point(size = 2.5, colour = "#2c3e50") +
+  geom_text(aes(label = label_number(scale = 1e-6, accuracy = 1, suffix = " M")(inmigrantes)),
+            vjust = -1, size = 3.3) +
+  scale_y_continuous(labels = label_number(scale = 1e-6, suffix = " M"),
+                     limits = c(0, NA), expand = expansion(mult = c(0, 0.1))) +
+  scale_x_continuous(breaks = unique(mundo$anio)) +
+  labs(title = "Inmigrantes en el mundo (stock), 1990–2024",
+       x = NULL, y = "Millones de personas",
+       caption = "Fuente: Our World in Data, con base en UN DESA.") +
+  theme_minimal(base_size = 12)
+```
+
+> **Pregunta 2.** ¿En qué intervalo creció más el número de inmigrantes en términos absolutos? ¿Y en términos de TCAC? ¿Coinciden? ¿Por qué el cambio porcentual 2020–2024 no es directamente comparable con los anteriores?
+
+# Estadísticas descriptivas (año 2024)
+
+## Medidas de resumen entre países
+
+```{r desc-2024}
+p2024 <- paises |> filter(anio == 2024)
+
+resumen_2024 <- p2024 |>
+  summarise(
+    n_paises = n(),
+    total    = sum(inmigrantes),
+    media    = mean(inmigrantes),
+    mediana  = median(inmigrantes),
+    desv_est = sd(inmigrantes),
+    coef_var = desv_est / media,
+    minimo   = min(inmigrantes),
+    q1       = quantile(inmigrantes, 0.25),
+    q3       = quantile(inmigrantes, 0.75),
+    rango_iq = IQR(inmigrantes),
+    maximo   = max(inmigrantes)
+  )
+
+resumen_2024 |>
+  pivot_longer(everything(), names_to = "estadistico", values_to = "valor") |>
+  kable(format.args = list(big.mark = ","), digits = 2)
+```
+
+> **Pregunta 3.** Compare la media con la mediana. ¿Qué nos dice esa diferencia sobre la forma de la distribución? ¿Cuál de las dos describe mejor al "país típico"? ¿Qué indica un coeficiente de variación mayor que 1?
+
+## Distribución
+
+Con una variable tan asimétrica, un histograma en escala lineal muestra una sola barra gigante. La **escala logarítmica** permite ver la forma de la distribución.
+
+```{r histograma}
+ggplot(p2024, aes(x = inmigrantes)) +
+  geom_histogram(bins = 30, fill = "#5d8aa8", colour = "white") +
+  geom_vline(aes(xintercept = median(inmigrantes), linetype = "Mediana"), colour = "#c0392b") +
+  geom_vline(aes(xintercept = mean(inmigrantes), linetype = "Media"), colour = "#c0392b") +
+  scale_x_log10(labels = label_number(scale_cut = cut_short_scale())) +
+  scale_linetype_manual(values = c("Mediana" = "solid", "Media" = "dashed"), name = NULL) +
+  labs(title = "Distribución de la población inmigrante por país, 2024",
+       subtitle = "Eje horizontal en escala logarítmica",
+       x = "Inmigrantes (escala log)", y = "Número de países") +
+  theme_minimal(base_size = 12)
+```
+
+## Comparación por continente
+
+```{r por-region}
+por_region <- p2024 |>
+  group_by(region) |>
+  summarise(
+    n_paises       = n(),
+    total          = sum(inmigrantes),
+    mediana        = median(inmigrantes),
+    media          = mean(inmigrantes),
+    pais_mayor     = pais[which.max(inmigrantes)],
+    max_inmigrantes = max(inmigrantes)
+  ) |>
+  mutate(part_mundial_pct = total / sum(total) * 100) |>
+  arrange(desc(total))
+
+por_region |> kable(format.args = list(big.mark = ","), digits = 1)
+```
+
+```{r boxplot-region}
+ggplot(p2024, aes(x = reorder(region, inmigrantes, FUN = median), y = inmigrantes)) +
+  geom_boxplot(fill = "#d6e4ee", outlier.colour = "#5d8aa8") +
+  geom_point(data = filter(p2024, pais == "Colombia"), colour = "#e67e22", size = 3.5) +
+  geom_text(data = filter(p2024, pais == "Colombia"), aes(label = pais),
+            colour = "#e67e22", hjust = -0.25, size = 3.5) +
+  scale_y_log10(labels = label_number(scale_cut = cut_short_scale())) +
+  coord_flip() +
+  labs(title = "Inmigrantes por país según continente, 2024",
+       subtitle = "Escala logarítmica; el punto naranja es Colombia",
+       x = NULL, y = "Inmigrantes (escala log)") +
+  theme_minimal(base_size = 12)
+```
+
+## Concentración: ¿cuántos países concentran a la mayoría de inmigrantes?
+
+```{r concentracion}
+conc_2024 <- p2024 |>
+  arrange(desc(inmigrantes)) |>
+  mutate(
+    puesto        = row_number(),
+    part_pct      = inmigrantes / sum(inmigrantes) * 100,
+    part_acum_pct = cumsum(part_pct)
+  )
+
+# Los 10 principales destinos
+conc_2024 |>
+  select(puesto, pais, region, inmigrantes, part_pct, part_acum_pct) |>
+  head(10) |>
+  kable(format.args = list(big.mark = ","), digits = 1)
+
+# ¿Qué porcentaje concentran los 1, 5, 10 y 20 primeros?
+conc_2024 |>
+  filter(puesto %in% c(1, 5, 10, 20)) |>
+  select(puesto, part_acum_pct) |>
+  kable(digits = 1)
+
+# ¿En qué puesto está Colombia?
+conc_2024 |> filter(pais == "Colombia") |> select(puesto, inmigrantes, part_pct)
+```
+
+```{r curva-concentracion}
+ggplot(filter(conc_2024, puesto <= 50), aes(x = puesto, y = part_acum_pct)) +
+  geom_line(colour = "#2c3e50", linewidth = 1) +
+  geom_point(data = filter(conc_2024, puesto <= 50, pais == "Colombia"),
+             colour = "#e67e22", size = 3.5) +
+  geom_hline(yintercept = 50, linetype = "dotted") +
+  scale_y_continuous(limits = c(0, 100)) +
+  labs(title = "Participación acumulada en el total mundial de inmigrantes, 2024",
+       subtitle = "Primeros 50 países ordenados de mayor a menor (punto naranja: Colombia)",
+       x = "Puesto del país", y = "% acumulado") +
+  theme_minimal(base_size = 12)
+```
+
+> **Pregunta 4.** ¿Cuántos países hacen falta para reunir la mitad de los inmigrantes del mundo? ¿Qué dice eso sobre la geografía de la migración internacional?
+
+# ¿Dónde creció más la población inmigrante?
+
+## Una función para medir el cambio entre dos años
+
+Escribimos una función para no repetir código. Recibe la base y los años de inicio y fin, y devuelve las tres medidas de cambio por país.
+
+```{r funcion-cambio}
+calcular_cambio <- function(datos, inicio, fin) {
+  datos |>
+    filter(anio %in% c(inicio, fin)) |>
+    select(pais, region, anio, inmigrantes) |>
+    pivot_wider(names_from = anio, values_from = inmigrantes, names_prefix = "y") |>
+    rename(inicial = all_of(paste0("y", inicio)),
+           final   = all_of(paste0("y", fin))) |>
+    filter(!is.na(inicial), !is.na(final)) |>
+    mutate(
+      cambio_abs = final - inicial,
+      cambio_pct = cambio_abs / inicial * 100,
+      tcac       = ((final / inicial)^(1 / (fin - inicio)) - 1) * 100,
+      multiplicador = final / inicial
+    )
+}
+
+cambio_90_24 <- calcular_cambio(paises, 1990, 2024)
+cambio_15_24 <- calcular_cambio(paises, 2015, 2024)
+```
+
+Una función auxiliar para mostrar tablas legibles:
+
+```{r funcion-tabla}
+tabla_cambio <- function(df, n = 10) {
+  df |>
+    head(n) |>
+    mutate(across(c(inicial, final, cambio_abs), ~ comma(.x)),
+           across(c(cambio_pct, tcac), ~ round(.x, 1)),
+           multiplicador = round(multiplicador, 1)) |>
+    kable()
+}
+```
+
+## Mayor incremento absoluto, 1990–2024
+
+```{r top-abs-9024}
+cambio_90_24 |> arrange(desc(cambio_abs)) |> tabla_cambio(10)
+```
+
+## Mayor incremento absoluto, 2015–2024
+
+El periodo reciente cambia bastante el panorama:
+
+```{r top-abs-1524}
+cambio_15_24 |> arrange(desc(cambio_abs)) |> tabla_cambio(10)
+```
+
+```{r grafico-top-abs, fig.height = 6.5}
+graficar_top <- function(df, titulo, n = 15, foco = "Colombia") {
+  top <- df |>
+    slice_max(cambio_abs, n = n) |>
+    bind_rows(filter(df, pais == foco)) |>     # asegura que el país foco aparezca
+    distinct(pais, .keep_all = TRUE) |>
+    mutate(destacado = pais == foco)
+
+  ggplot(top, aes(x = reorder(pais, cambio_abs), y = cambio_abs, fill = destacado)) +
+    geom_col() +
+    geom_text(aes(label = label_number(scale = 1e-6, accuracy = 0.01, suffix = " M")(cambio_abs)),
+              hjust = -0.1, size = 3.2) +
+    scale_fill_manual(values = c(`TRUE` = "#e67e22", `FALSE` = "#5d8aa8"), guide = "none") +
+    scale_y_continuous(labels = label_number(scale = 1e-6, suffix = " M"),
+                       expand = expansion(mult = c(0, 0.15))) +
+    coord_flip() +
+    labs(title = titulo, x = NULL, y = "Aumento del número de inmigrantes (millones)") +
+    theme_minimal(base_size = 12)
+}
+
+graficar_top(cambio_90_24, "Mayor aumento absoluto de inmigrantes, 1990–2024")
+graficar_top(cambio_15_24, "Mayor aumento absoluto de inmigrantes, 2015–2024")
+```
+
+## Mayor incremento relativo (y su trampa)
+
+El cambio porcentual premia a los países que partían de cifras muy pequeñas: pasar de 300 a 3.000 inmigrantes es un aumento de 900 %. Para que la comparación tenga sentido sustantivo, fijamos un **umbral mínimo** en el año base.
+
+```{r top-pct}
+# Sin umbral: ¿qué tipo de países aparecen arriba?
+cambio_15_24 |> arrange(desc(cambio_pct)) |> tabla_cambio(10)
+
+# Con umbral: al menos 100.000 inmigrantes en el año base
+umbral <- 100000
+
+cambio_90_24 |> filter(inicial >= umbral) |> arrange(desc(cambio_pct)) |> tabla_cambio(10)
+cambio_15_24 |> filter(inicial >= umbral) |> arrange(desc(cambio_pct)) |> tabla_cambio(10)
+```
+
+> **Pregunta 5.** Cambie el `umbral` a 50.000 y a 500.000. ¿Qué países entran y salen del ranking? ¿Qué tan robusta es la posición de Colombia?
+
+## Lo que no creció: las mayores disminuciones
+
+```{r disminuciones}
+cambio_90_24 |> arrange(cambio_abs) |> tabla_cambio(10)
+```
+
+> **Pregunta 6.** Varios de los países con mayores disminuciones pertenecían a la antigua Unión Soviética o al subcontinente indio. Recordando que "inmigrante" significa "nacido en otro país", ¿cómo puede el trazado de nuevas fronteras en 1947 o 1991 producir "inmigrantes" que nunca se movieron? ¿Por qué su número tiende a bajar con el tiempo?
+
+## Trayectorias de los países con mayor aumento reciente
+
+```{r trayectorias, fig.height = 7}
+top_recientes <- cambio_15_24 |>
+  slice_max(cambio_abs, n = 8) |>
+  pull(pais) |>
+  union("Colombia")
+
+paises |>
+  filter(pais %in% top_recientes) |>
+  mutate(pais = fct_reorder(pais, inmigrantes, .fun = max, .desc = TRUE)) |>
+  ggplot(aes(x = anio, y = inmigrantes, colour = pais == "Colombia")) +
+  geom_line(linewidth = 1) +
+  geom_point(size = 1.8) +
+  facet_wrap(~ pais, scales = "free_y", ncol = 3) +
+  scale_colour_manual(values = c(`TRUE` = "#e67e22", `FALSE` = "#2c3e50"), guide = "none") +
+  scale_y_continuous(labels = label_number(scale_cut = cut_short_scale())) +
+  scale_x_continuous(breaks = c(1990, 2005, 2024)) +
+  labs(title = "Trayectorias 1990–2024 de los países con mayor aumento absoluto en 2015–2024",
+       subtitle = "Cada panel tiene su propia escala vertical",
+       x = NULL, y = "Inmigrantes") +
+  theme_minimal(base_size = 11)
+```
+
+> **Pregunta 7.** Compare la forma de las curvas. ¿Qué países muestran un crecimiento sostenido de largo plazo y cuáles un salto abrupto? ¿Qué tipo de procesos sociales (mercados laborales, guerras, crisis políticas, acuerdos de movilidad) podrían estar detrás de cada forma?
+
+# El caso de Colombia
+
+Toda esta sección usa la variable `pais_foco`. Cámbiela por otro país (por ejemplo `"Peru"` o `"Chile"`, con el nombre en inglés como aparece en la base) para replicar el análisis.
+
+```{r pais-foco}
+pais_foco <- "Colombia"
+```
+
+## La serie
+
+```{r colombia-serie}
+foco <- paises |>
+  filter(pais == pais_foco) |>
+  arrange(anio) |>
+  mutate(
+    cambio_abs     = inmigrantes - lag(inmigrantes),
+    cambio_pct     = cambio_abs / lag(inmigrantes) * 100,
+    tcac           = ((inmigrantes / lag(inmigrantes))^(1 / (anio - lag(anio))) - 1) * 100,
+    indice_1990    = inmigrantes / first(inmigrantes) * 100
+  )
+
+foco |>
+  select(anio, inmigrantes, cambio_abs, cambio_pct, tcac, indice_1990) |>
+  kable(format.args = list(big.mark = ","), digits = 1)
+```
+
+```{r colombia-grafico}
+ggplot(foco, aes(x = anio, y = inmigrantes)) +
+  annotate("rect", xmin = 2015, xmax = 2020, ymin = -Inf, ymax = Inf,
+           fill = "#e67e22", alpha = 0.12) +
+  geom_line(linewidth = 1.1, colour = "#e67e22") +
+  geom_point(size = 2.8, colour = "#e67e22") +
+  geom_text(aes(label = comma(inmigrantes)), vjust = -1, size = 3.2) +
+  scale_y_continuous(labels = label_number(scale_cut = cut_short_scale()),
+                     expand = expansion(mult = c(0.05, 0.15))) +
+  scale_x_continuous(breaks = foco$anio) +
+  labs(title = paste("Población inmigrante en", pais_foco, "1990–2024"),
+       subtitle = "Zona sombreada: intervalo 2015–2020",
+       x = NULL, y = "Inmigrantes",
+       caption = "Fuente: Our World in Data, con base en UN DESA.") +
+  theme_minimal(base_size = 12)
+```
+
+## Posición de Colombia en el mundo a lo largo del tiempo
+
+```{r colombia-ranking}
+ranking <- paises |>
+  group_by(anio) |>
+  mutate(puesto = min_rank(desc(inmigrantes)),
+         n_paises = n(),
+         part_mundial_pct = inmigrantes / sum(inmigrantes) * 100) |>
+  ungroup()
+
+ranking_foco <- ranking |>
+  filter(pais == pais_foco) |>
+  select(anio, inmigrantes, puesto, n_paises, part_mundial_pct)
+
+ranking_foco |> kable(format.args = list(big.mark = ","), digits = 2)
+
+ggplot(ranking_foco, aes(x = anio, y = puesto)) +
+  geom_line(colour = "#e67e22", linewidth = 1) +
+  geom_point(colour = "#e67e22", size = 3) +
+  geom_text(aes(label = puesto), vjust = -1, size = 3.5) +
+  scale_y_reverse(expand = expansion(mult = 0.15)) +
+  scale_x_continuous(breaks = ranking_foco$anio) +
+  labs(title = paste("Puesto de", pais_foco, "entre los países con más inmigrantes"),
+       subtitle = "1 = país con más inmigrantes del mundo",
+       x = NULL, y = "Puesto") +
+  theme_minimal(base_size = 12)
+```
+
+## Colombia frente a Suramérica
+
+```{r suramerica}
+sudamerica <- paises |> filter(region == "South America")
+
+# Participación de cada país en el total suramericano de inmigrantes
+part_sa <- sudamerica |>
+  group_by(anio) |>
+  mutate(part_sa_pct = inmigrantes / sum(inmigrantes) * 100) |>
+  ungroup()
+
+part_sa |>
+  filter(anio %in% c(1990, 2015, 2024)) |>
+  select(pais, anio, part_sa_pct) |>
+  pivot_wider(names_from = anio, values_from = part_sa_pct, names_prefix = "part_") |>
+  arrange(desc(part_2024)) |>
+  head(8) |>
+  kable(digits = 1)
+```
+
+```{r suramerica-grafico}
+vecinos <- c("Colombia", "Peru", "Chile", "Ecuador", "Brazil", "Argentina", "Venezuela")
+
+sudamerica |>
+  filter(pais %in% vecinos) |>
+  ggplot(aes(x = anio, y = inmigrantes, colour = pais, linewidth = pais == "Colombia")) +
+  geom_line() +
+  geom_point(size = 1.8) +
+  scale_linewidth_manual(values = c(`TRUE` = 1.6, `FALSE` = 0.7), guide = "none") +
+  scale_y_continuous(labels = label_number(scale_cut = cut_short_scale())) +
+  scale_x_continuous(breaks = unique(sudamerica$anio)) +
+  labs(title = "Inmigrantes en países seleccionados de Suramérica, 1990–2024",
+       x = NULL, y = "Inmigrantes", colour = NULL) +
+  theme_minimal(base_size = 12)
+```
+
+> **Pregunta 8.** ¿En qué intervalo se concentra el cambio en Colombia? ¿Qué otros países de la región muestran el mismo patrón y en qué momento? Formule una hipótesis sobre el proceso que lo explica y diga qué datos adicionales necesitaría para contrastarla (pista: esta base no informa el **país de origen** de los inmigrantes).
+
+> **Pregunta 9.** Venezuela aparece en la gráfica como país *de destino*. ¿Por qué su número de inmigrantes no cae abruptamente después de 2015, si fue el principal país de origen de la migración regional? ¿Qué diferencia hay entre *emigración* e *inmigración* en estos datos?
+
+# Para leer los datos con sospecha
+
+Los números de esta base no son observaciones directas: son **estimaciones** que combinan censos, registros administrativos y encuestas, con interpolaciones donde no hay datos. Una forma sencilla de detectarlo es buscar series con valores idénticos en años consecutivos, algo muy improbable en una población real.
+
+```{r valores-repetidos}
+paises |>
+  arrange(pais, anio) |>
+  group_by(pais) |>
+  summarise(valores_repetidos = sum(inmigrantes == lag(inmigrantes), na.rm = TRUE)) |>
+  filter(valores_repetidos >= 2) |>
+  arrange(desc(valores_repetidos)) |>
+  kable()
+```
+
+> **Pregunta 10.** ¿Qué hacen las agencias estadísticas cuando un país no tiene censo en un periodo, o cuando el país no existía como tal (por ejemplo, Sudán del Sur antes de 2011)? ¿Cómo cambia su lectura de los rankings anteriores saber esto?
+
+# Ejercicios
+
+1. **Otro periodo.** Use `calcular_cambio()` para el periodo 2010–2020. ¿Cuáles son los cinco países con mayor aumento absoluto? ¿Cuántos coinciden con los de 2015–2024?
+2. **Otro país foco.** Cambie `pais_foco` por `"Peru"` y luego por `"Chile"`, y vuelva a ejecutar la sección 6. Compare la forma de las curvas con la de Colombia.
+3. **Descriptivas por continente en el tiempo.** Calcule la mediana de inmigrantes por continente para cada año y grafíquela con `geom_line()`. ¿Qué continente creció más en el país típico?
+4. **TCAC.** Construya una tabla con la TCAC 2015–2024 de los países suramericanos y ordénela de mayor a menor.
+5. **Del número absoluto a la proporción.** El número de inmigrantes no dice cuánto "pesan" en la población de cada país. Busque en Our World in Data una serie de población total por país, descárguela con `read_csv()`, únala a esta base con `left_join()` por `codigo` y `anio`, y calcule el porcentaje de población inmigrante. ¿Cambia el ranking de los diez primeros?
+
+# Notas para el docente
+
+Resultados esperados con los datos publicados por OWID (consultados en octubre de 2026). Si OWID actualiza la serie, las cifras pueden cambiar ligeramente.
+
+- **Mundo:** de unos 154 millones de inmigrantes en 1990 a unos 304 millones en 2024; el total casi se duplica.
+- **Mayor aumento absoluto 1990–2024:** Estados Unidos (≈ +29,1 M), seguido de Alemania (≈ +9,8 M), Arabia Saudita (≈ +9,2 M), Reino Unido (≈ +8,2 M) y España (≈ +8,1 M). Completan el top 10 Emiratos Árabes Unidos, Turquía, Italia, Canadá y Jordania.
+- **Mayor aumento absoluto 2015–2024:** Estados Unidos (≈ +4,4 M), Alemania (≈ +4,1 M), Turquía (≈ +3,3 M), España (≈ +3,0 M) y **Colombia (≈ +2,9 M, quinto lugar del mundo)**, por delante del Reino Unido.
+- **Mayor aumento relativo (umbral de 100.000 en el año base):** Colombia encabeza ambos periodos: su stock se multiplica por ≈ 30 entre 1990 y 2024 y por ≈ 21 entre 2015 y 2024. En 2015–2024 le sigue Perú (≈ ×12).
+- **Concentración del cambio en Colombia:** el salto ocurre entre 2015 (≈ 146 mil) y 2020 (≈ 1,93 M), y continúa hasta ≈ 3,06 M en 2024. Perú, Chile y Ecuador muestran saltos en el mismo intervalo, lo que apunta a un proceso regional (Pregunta 8).
+- **Colombia en el mundo y en la región:** en 2024 ocupa aproximadamente el puesto 22 entre los países con más inmigrantes y pasa a ser el principal receptor de Suramérica (≈ 24 % del stock regional, frente a ≈ 2–3 % entre 1990 y 2015).
+- **Mayores disminuciones 1990–2024:** Rusia, India, Pakistán, Ucrania y Kazajistán, entre otros: efecto de las fronteras trazadas en 1947 y 1991 y de la mortalidad de esas cohortes (Pregunta 6).
+- **Valores repetidos:** Curazao, Montenegro, Sudán del Sur y Sint Maarten, entre otros, repiten exactamente el mismo valor en varias observaciones entre 1990 y 2005 (Pregunta 10).
