@@ -564,16 +564,3 @@ paises |>
 3. **Descriptivas por continente en el tiempo.** Calcule la mediana de inmigrantes por continente para cada año y grafíquela con `geom_line()`. ¿Qué continente creció más en el país típico?
 4. **TCAC.** Construya una tabla con la TCAC 2015–2024 de los países suramericanos y ordénela de mayor a menor.
 5. **Del número absoluto a la proporción.** El número de inmigrantes no dice cuánto "pesan" en la población de cada país. Busque en Our World in Data una serie de población total por país, descárguela con `read_csv()`, únala a esta base con `left_join()` por `codigo` y `anio`, y calcule el porcentaje de población inmigrante. ¿Cambia el ranking de los diez primeros?
-
-# Notas para el docente
-
-Resultados esperados con los datos publicados por OWID (consultados en octubre de 2026). Si OWID actualiza la serie, las cifras pueden cambiar ligeramente.
-
-- **Mundo:** de unos 154 millones de inmigrantes en 1990 a unos 304 millones en 2024; el total casi se duplica.
-- **Mayor aumento absoluto 1990–2024:** Estados Unidos (≈ +29,1 M), seguido de Alemania (≈ +9,8 M), Arabia Saudita (≈ +9,2 M), Reino Unido (≈ +8,2 M) y España (≈ +8,1 M). Completan el top 10 Emiratos Árabes Unidos, Turquía, Italia, Canadá y Jordania.
-- **Mayor aumento absoluto 2015–2024:** Estados Unidos (≈ +4,4 M), Alemania (≈ +4,1 M), Turquía (≈ +3,3 M), España (≈ +3,0 M) y **Colombia (≈ +2,9 M, quinto lugar del mundo)**, por delante del Reino Unido.
-- **Mayor aumento relativo (umbral de 100.000 en el año base):** Colombia encabeza ambos periodos: su stock se multiplica por ≈ 30 entre 1990 y 2024 y por ≈ 21 entre 2015 y 2024. En 2015–2024 le sigue Perú (≈ ×12).
-- **Concentración del cambio en Colombia:** el salto ocurre entre 2015 (≈ 146 mil) y 2020 (≈ 1,93 M), y continúa hasta ≈ 3,06 M en 2024. Perú, Chile y Ecuador muestran saltos en el mismo intervalo, lo que apunta a un proceso regional (Pregunta 8).
-- **Colombia en el mundo y en la región:** en 2024 ocupa aproximadamente el puesto 22 entre los países con más inmigrantes y pasa a ser el principal receptor de Suramérica (≈ 24 % del stock regional, frente a ≈ 2–3 % entre 1990 y 2015).
-- **Mayores disminuciones 1990–2024:** Rusia, India, Pakistán, Ucrania y Kazajistán, entre otros: efecto de las fronteras trazadas en 1947 y 1991 y de la mortalidad de esas cohortes (Pregunta 6).
-- **Valores repetidos:** Curazao, Montenegro, Sudán del Sur y Sint Maarten, entre otros, repiten exactamente el mismo valor en varias observaciones entre 1990 y 2005 (Pregunta 10).
