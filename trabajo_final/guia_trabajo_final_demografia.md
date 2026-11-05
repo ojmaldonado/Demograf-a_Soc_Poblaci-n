@@ -542,8 +542,7 @@ La nota se calcula sobre 5,0. El 70 % corresponde al contenido del póster y el 
 | Interpretación y transición demográfica | 20 % | Cada resultado se interpreta; la unidad se ubica en la transición con argumentos y se relaciona con el contexto social | Interpretación descriptiva, poco conectada con la teoría | Se muestran gráficos sin interpretarlos             |
 | Diseño y comunicación visual            | 15 % | Jerarquía clara, gráficos legibles con fuente, texto breve; se entiende en 3 minutos                                   | Legible pero recargado o desordenado                     | Difícil de leer; gráficos sin títulos ni fuentes    |
 | Código y reproducibilidad               | 15 % | Corre de principio a fin sin errores, rutas relativas, comentado, reproduce todas las cifras                           | Corre con ajustes menores o le faltan comentarios        | No corre o no corresponde con el póster             |
-| Base de datos y documentación           | 5 %  | Brutos y procesados, formato largo, diccionario y fuentes completas                                                    | Base procesada sin diccionario completo                  | Datos faltantes o sin documentar                    |
-| Socialización                           | 10 % | Todo el grupo explica resultados y código con dominio                                                                  | Explicación correcta pero desigual entre integrantes     | No logran explicar el análisis o el código          |
+| Base de datos y documentación           | 15 %  | Brutos y procesados, formato largo, diccionario y fuentes completas                                                    | Base procesada sin diccionario completo                  | 
 
 Un póster cuyas cifras no se puedan reproducir con el código entregado tiene una nota máxima de 3,0 en el criterio de cálculo de indicadores.
 
