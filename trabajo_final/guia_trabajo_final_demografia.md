@@ -14,7 +14,7 @@ Con este trabajo cada grupo debe demostrar que puede:
 - Ubicar la unidad territorial en el modelo de transición demográfica visto en clase.
 - Comunicar hallazgos con gráficos claros y un argumento sintético en un formato visual.
 
-**Modalidad sugerida:** grupos de 2 a 3 personas. Cualquier excepción se acuerda con el profesor.
+**Modalidad sugerida:** Individual. Cualquier excepción se acuerda con el profesor.
 
 ## 2. Elección de la unidad territorial
 
