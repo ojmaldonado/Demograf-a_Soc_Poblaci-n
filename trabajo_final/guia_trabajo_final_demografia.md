@@ -1,6 +1,7 @@
 # Guía del trabajo final — Póster de análisis demográfico de una unidad territorial
 
 Dinámica Poblacional y Demografía · Universidad del Rosario · 5 de noviembre de 2026
+## Fecha de entrega: 23 de noviembre, antes de las 23:59 via e-aulas
 
 ## 1. Propósito y producto final
 
