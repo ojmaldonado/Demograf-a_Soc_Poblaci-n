@@ -558,7 +558,8 @@ Un póster cuyas cifras no se puedan reproducir con el código entregado tiene u
 - Leer la TGF como "número de hijos que tienen las mujeres hoy" en lugar de una medida de periodo.
 - Interpretar la migración estimada por ecuación compensadora como dato medido: es un residuo que acumula los errores de las otras fuentes.
 - Texto largo copiado de informes oficiales en el póster.
-- Gráficos con los colores y títulos por defecto en inglés.
+
+## Nota sobre uso de IA: el uso de IA es permitido para apoyar el procesamiento de información y corregir código. Se debe enunciar el modelo usado.
 
 **Recursos**
 
